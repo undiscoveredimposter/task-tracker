@@ -144,6 +144,18 @@ export function ListDetail() {
               </Link>
             </>
           )}
+          {/* A bar pinned to the bottom of the window is thumb reach on a phone
+              and stranded furniture on a laptop, so up here it comes. */}
+          {canEdit && (
+            <button
+              type="button"
+              onClick={() => setAdding(true)}
+              className="tap ml-auto hidden shrink-0 items-center gap-1.5 rounded-xl border-[1.5px] border-accent px-3.5 font-semibold text-accent-ink md:inline-flex"
+            >
+              <PlusIcon size={14} />
+              Add a task
+            </button>
+          )}
         </div>
       </div>
 
@@ -170,7 +182,7 @@ export function ListDetail() {
             : 'The owner has not added any tasks yet.'}
         </EmptyState>
       ) : (
-        <div className="flex flex-1 flex-col gap-2 overflow-y-auto px-4 pt-0.5 pb-32">
+        <div className="flex flex-1 flex-col gap-2 overflow-y-auto px-4 pt-0.5 pb-32 md:pb-6">
           {list.tasks.map((task) => (
             <TaskRow
               key={task.id}
@@ -187,7 +199,7 @@ export function ListDetail() {
       {justDone && (
         <div
           role="status"
-          className="anim-toast absolute inset-x-4 bottom-28 z-20 flex min-h-13 items-center gap-2.5 rounded-2xl bg-toast py-2 pr-2 pl-4 text-toast-ink shadow-[0_8px_24px_rgba(0,0,0,.35)]"
+          className="anim-toast absolute inset-x-4 bottom-28 z-20 flex min-h-13 items-center gap-2.5 rounded-2xl bg-toast py-2 pr-2 pl-4 text-toast-ink shadow-[0_8px_24px_rgba(0,0,0,.35)] md:bottom-6"
         >
           <CheckIcon />
           <span className="flex-1 truncate text-sm font-medium">{justDone.title} — done</span>
@@ -202,7 +214,7 @@ export function ListDetail() {
       )}
 
       {canEdit && (
-        <BottomBar>
+        <BottomBar className="md:hidden">
           <button type="button" onClick={() => setAdding(true)} className="btn btn-primary w-full bg-ground">
             <PlusIcon />
             Add a task

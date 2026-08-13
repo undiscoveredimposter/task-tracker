@@ -1,6 +1,7 @@
 import { Navigate, Route, BrowserRouter as Router, Routes, useLocation } from 'react-router-dom';
 import { AuthProvider, useAuth } from './lib/auth';
 import { DataProvider, useData } from './lib/store';
+import { DesktopSidebar, DesktopTopBar } from './components/DesktopChrome';
 import { InstallPrompt } from './components/InstallPrompt';
 import { EmptyState, ListSkeleton } from './components/ui';
 import { Invite } from './screens/Invite';
@@ -40,59 +41,68 @@ function ErrorBanner() {
 }
 
 function Shell() {
+  const { me } = useAuth();
   const location = useLocation();
-  // The desktop layout caps the column so rows stay scannable; on a phone this
-  // is simply the full width.
-  const wide = location.pathname === '/';
+  // Sign-in and an invite landing are pages in their own right — someone who
+  // isn't a member yet has no lists to put in a sidebar.
+  const chrome = Boolean(me) && !location.pathname.startsWith('/j/');
 
   return (
-    <div className="mx-auto h-full w-full max-w-2xl" data-wide={wide}>
-      <ErrorBanner />
-      <Routes>
-        <Route path="/j/:token" element={<Invite />} />
-        <Route
-          path="/"
-          element={
-            <Protected>
-              <Lists />
-            </Protected>
-          }
-        />
-        <Route
-          path="/l/:id"
-          element={
-            <Protected>
-              <ListDetail />
-            </Protected>
-          }
-        />
-        <Route
-          path="/l/:id/settings"
-          element={
-            <Protected>
-              <ListSettings />
-            </Protected>
-          }
-        />
-        <Route
-          path="/l/:id/share"
-          element={
-            <Protected>
-              <Share />
-            </Protected>
-          }
-        />
-        <Route
-          path="/l/:id/stats"
-          element={
-            <Protected>
-              <Stats />
-            </Protected>
-          }
-        />
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
-      <InstallPrompt />
+    <div className="flex h-full flex-col">
+      {chrome && <DesktopTopBar />}
+      <div className="flex min-h-0 flex-1">
+        {chrome && <DesktopSidebar />}
+        {/* The column is capped so a row never stretches to the far edge of a
+            laptop; on a phone this is simply the full width. */}
+        <main className="mx-auto h-full w-full max-w-[680px] min-w-0 flex-1">
+          <ErrorBanner />
+          <Routes>
+            <Route path="/j/:token" element={<Invite />} />
+            <Route
+              path="/"
+              element={
+                <Protected>
+                  <Lists />
+                </Protected>
+              }
+            />
+            <Route
+              path="/l/:id"
+              element={
+                <Protected>
+                  <ListDetail />
+                </Protected>
+              }
+            />
+            <Route
+              path="/l/:id/settings"
+              element={
+                <Protected>
+                  <ListSettings />
+                </Protected>
+              }
+            />
+            <Route
+              path="/l/:id/share"
+              element={
+                <Protected>
+                  <Share />
+                </Protected>
+              }
+            />
+            <Route
+              path="/l/:id/stats"
+              element={
+                <Protected>
+                  <Stats />
+                </Protected>
+              }
+            />
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
+          <InstallPrompt />
+        </main>
+      </div>
     </div>
   );
 }

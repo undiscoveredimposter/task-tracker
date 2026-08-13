@@ -1,0 +1,81 @@
+# Tally — the stack Coolify deploys.
+#
+# One service. Postgres is a *Coolify-managed database*, not a service here, so
+# that backups and retention are Coolify's job; it injects DATABASE_URL.
+# There is deliberately no `postgres` service in this file — adding one would
+# give you a second, unbacked-up database that quietly shadows the real one.
+#
+# For a local stack with a throwaway Postgres, use docker-compose.local.yml.
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      # Vite inlines VITE_* into the bundle at build time. In Coolify these must
+      # be set as BUILD VARIABLES. Set only as runtime environment they arrive
+      # too late, the bundle ships with undefined Firebase config, and sign-in
+      # fails for everyone with no server-side error to point at.
+      args:
+        VITE_FIREBASE_API_KEY: ${VITE_FIREBASE_API_KEY}
+        VITE_FIREBASE_AUTH_DOMAIN: ${VITE_FIREBASE_AUTH_DOMAIN}
+        VITE_FIREBASE_PROJECT_ID: ${VITE_FIREBASE_PROJECT_ID}
+        VITE_FIREBASE_APP_ID: ${VITE_FIREBASE_APP_ID}
+
+    restart: unless-stopped
+
+    # PID 1 reaping. The app's own SIGTERM handler does the graceful shutdown.
+    init: true
+
+    environment:
+      # Not a performance setting. The development auth bypass in
+      # server/src/firebase.ts is gated on NODE_ENV, and this must stay
+      # 'production' in every deployed container.
+      NODE_ENV: production
+      PORT: 8080
+
+      # Injected by Coolify from the managed Postgres. Required — the server
+      # refuses to start without it rather than failing at first query.
+      DATABASE_URL: ${DATABASE_URL:?set DATABASE_URL to the Coolify-managed Postgres}
+
+      # Public origin, used to build invite links. No trailing slash.
+      APP_ORIGIN: ${APP_ORIGIN:?set APP_ORIGIN to the app's public https origin}
+
+      # Firebase Admin service account. FIREBASE_PRIVATE_KEY may contain literal
+      # \n escapes — config.ts unescapes them. This key is server-side only and
+      # must never be exposed to the web build.
+      FIREBASE_PROJECT_ID: ${FIREBASE_PROJECT_ID}
+      FIREBASE_CLIENT_EMAIL: ${FIREBASE_CLIENT_EMAIL}
+      FIREBASE_PRIVATE_KEY: ${FIREBASE_PRIVATE_KEY}
+
+      INVITE_DEFAULT_DAYS: ${INVITE_DEFAULT_DAYS:-7}
+
+    # Coolify's proxy terminates TLS and routes to this port; the container is
+    # not published on the host directly.
+    expose:
+      - "8080"
+
+    # Mirrors the HEALTHCHECK in the Dockerfile so it is visible here too.
+    # start_period covers migrations, which run before the port opens.
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://127.0.0.1:'+(process.env.PORT||8080)+'/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+      interval: 15s
+      timeout: 5s
+      start_period: 30s
+      retries: 5
+
+    # SSE connections are long-lived. On shutdown the server closes them and
+    # drains the pool; give it room to finish rather than being SIGKILLed
+    # mid-write. Do not put a buffering or short-timeout proxy in front of
+    # /api/stream — it will look like live updates simply do not work.
+    stop_grace_period: 30s
+
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"

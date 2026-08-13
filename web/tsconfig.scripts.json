@@ -1,0 +1,20 @@
+{
+  // Build-time tooling, kept out of tsconfig.json so that app code cannot
+  // reach for a Node built-in and still typecheck. Run by Node directly, which
+  // strips the types, so nothing here is ever emitted.
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022"],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "isolatedModules": true,
+    "allowImportingTsExtensions": true,
+    "forceConsistentCasingInFileNames": true,
+    "types": ["node"]
+  },
+  "include": ["scripts"]
+}
