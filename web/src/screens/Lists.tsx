@@ -4,6 +4,7 @@ import { useAuth } from '../lib/auth';
 import { useData } from '../lib/store';
 import { cadenceLabel, resetsInLabel } from '../lib/format';
 import { NewListSheet } from '../components/NewListSheet';
+import { ThemeToggle } from '../components/ThemeToggle';
 import {
   Avatar,
   AvatarStack,
@@ -34,59 +35,69 @@ export function Lists() {
         </button>
       </div>
 
+      {/* Outside the scroll container: whether what follows is current is the
+          first thing to know about it, so it must not scroll away. */}
       <OfflineBanner online={online} pending={pending} savedAt={savedAt} />
 
-      {listsLoading ? (
-        <div className="flex flex-col gap-3 px-4">
-          <Skeleton className="h-[118px]" />
-          <Skeleton className="h-[118px]" />
-        </div>
-      ) : lists.length === 0 && !online && savedAt === null ? (
-        // No signal and nothing saved yet — an empty account and an unreachable
-        // one look identical from here, so don't claim to know which it is.
-        // No icon, like the app's other "something is wrong" states.
-        <EmptyState title="Nothing saved on this device">
-          Your lists will be here once you have a connection again.
-        </EmptyState>
-      ) : lists.length === 0 ? (
-        <EmptyState
-          title="Nothing to keep track of yet"
-          icon={
-            <svg width={56} height={56} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.4} strokeLinecap="round" strokeLinejoin="round" className="text-muted">
-              <rect x="4" y="3.5" width="16" height="17" rx="3" />
-              <path d="M8.5 9.5l2 2 4-4.5" />
-              <path d="M8.5 15.5h7" opacity={0.5} />
-            </svg>
-          }
-        >
-          Make a list for the daily stuff — feeding the cat, the dishwasher — and invite whoever
-          shares it with you.
-        </EmptyState>
-      ) : (
-        <div className="flex flex-1 flex-col gap-3 overflow-y-auto px-4 pb-32 md:pb-6">
-          {lists.map((list) => (
-            <Link key={list.id} to={`/l/${list.id}`} className="card block rounded-2xl p-4">
-              <div className="flex items-center gap-3">
-                <span className="text-[28px] leading-none">{list.emoji}</span>
-                <div className="min-w-0 flex-1">
-                  <div className="truncate text-lg font-semibold">{list.name}</div>
-                  <div className="truncate text-xs text-muted">{cadenceLabel(list)}</div>
+      {/* Appearance rides at the end of the scroll rather than in the header.
+          It gets chosen once and then never again, so it must not compete with
+          the lists for the top of a 375px screen. Whichever branch precedes it
+          grows, which keeps it on the bottom edge when there is little above. */}
+      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto pb-32 md:pb-6">
+        {listsLoading ? (
+          <div className="flex flex-1 flex-col gap-3 px-4">
+            <Skeleton className="h-[118px]" />
+            <Skeleton className="h-[118px]" />
+          </div>
+        ) : lists.length === 0 && !online && savedAt === null ? (
+          // No signal and nothing saved yet — an empty account and an unreachable
+          // one look identical from here, so don't claim to know which it is.
+          // No icon, like the app's other "something is wrong" states.
+          <EmptyState title="Nothing saved on this device">
+            Your lists will be here once you have a connection again.
+          </EmptyState>
+        ) : lists.length === 0 ? (
+          <EmptyState
+            title="Nothing to keep track of yet"
+            icon={
+              <svg width={56} height={56} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.4} strokeLinecap="round" strokeLinejoin="round" className="text-muted">
+                <rect x="4" y="3.5" width="16" height="17" rx="3" />
+                <path d="M8.5 9.5l2 2 4-4.5" />
+                <path d="M8.5 15.5h7" opacity={0.5} />
+              </svg>
+            }
+          >
+            Make a list for the daily stuff — feeding the cat, the dishwasher — and invite whoever
+            shares it with you.
+          </EmptyState>
+        ) : (
+          <div className="flex flex-1 flex-col gap-3 px-4">
+            {lists.map((list) => (
+              <Link key={list.id} to={`/l/${list.id}`} className="card block rounded-2xl p-4">
+                <div className="flex items-center gap-3">
+                  <span className="text-[28px] leading-none">{list.emoji}</span>
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate text-lg font-semibold">{list.name}</div>
+                    <div className="truncate text-xs text-muted">{cadenceLabel(list)}</div>
+                  </div>
+                  <AvatarStack users={list.members} />
                 </div>
-                <AvatarStack users={list.members} />
-              </div>
-              <div className="mt-3.5 flex items-center gap-2.5">
-                <ProgressBar done={list.doneCount} total={list.taskCount} />
-                <span className="text-[13px] font-medium whitespace-nowrap">
-                  {list.doneCount} of {list.taskCount} done
-                </span>
-              </div>
-              <div className="mt-2 text-xs text-muted first-letter:uppercase">
-                {resetsInLabel(list.resetsAt)}
-              </div>
-            </Link>
-          ))}
-        </div>
-      )}
+                <div className="mt-3.5 flex items-center gap-2.5">
+                  <ProgressBar done={list.doneCount} total={list.taskCount} />
+                  <span className="text-[13px] font-medium whitespace-nowrap">
+                    {list.doneCount} of {list.taskCount} done
+                  </span>
+                </div>
+                <div className="mt-2 text-xs text-muted first-letter:uppercase">
+                  {resetsInLabel(list.resetsAt)}
+                </div>
+              </Link>
+            ))}
+          </div>
+        )}
+
+        <ThemeToggle className="mt-8 px-4" />
+      </div>
 
       {/* On a desktop the sidebar already carries New list, pinned where it can
           always be reached. */}
