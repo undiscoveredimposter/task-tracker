@@ -7,13 +7,17 @@ import { isProduction } from './config.js';
  * generic 500 — internal detail never reaches the client in production.
  */
 export class HttpError extends Error {
-  constructor(
-    readonly status: number,
-    message: string,
-    readonly code?: string,
-  ) {
+  // Written out rather than declared as constructor parameter properties: those
+  // are the one piece of TypeScript that Node's built-in type stripping cannot
+  // erase, and the integration tests load these modules straight from source.
+  readonly status: number;
+  readonly code: string | undefined;
+
+  constructor(status: number, message: string, code?: string) {
     super(message);
     this.name = 'HttpError';
+    this.status = status;
+    this.code = code;
   }
 }
 
