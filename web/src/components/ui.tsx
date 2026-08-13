@@ -45,6 +45,13 @@ export const OfflineIcon = ({ size = 16, className = '' }: { size?: number; clas
   </svg>
 );
 
+export const UpdateIcon = ({ size = 18 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" {...stroke} strokeWidth={2} className="shrink-0">
+    <path d="M20 12a8 8 0 1 1-2.4-5.7" />
+    <path d="M20.5 3.8V8h-4.2" />
+  </svg>
+);
+
 export const LinkIcon = () => (
   <svg width={18} height={18} viewBox="0 0 24 24" {...stroke} strokeWidth={1.8} className="shrink-0">
     <path d="M10 14a4.5 4.5 0 0 0 6.4 0l3-3a4.5 4.5 0 0 0-6.4-6.4l-1.5 1.5" />

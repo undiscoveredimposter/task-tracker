@@ -3,6 +3,7 @@ import { AuthProvider, useAuth } from './lib/auth';
 import { DataProvider, useData } from './lib/store';
 import { DesktopSidebar, DesktopTopBar } from './components/DesktopChrome';
 import { InstallPrompt } from './components/InstallPrompt';
+import { UpdateBar } from './components/UpdateBar';
 import { EmptyState, ListSkeleton } from './components/ui';
 import { Invite } from './screens/Invite';
 import { ListDetail } from './screens/ListDetail';
@@ -62,52 +63,57 @@ function Shell() {
         {chrome && <DesktopSidebar />}
         {/* The column is capped so a row never stretches to the far edge of a
             laptop; on a phone this is simply the full width. */}
-        <main className="mx-auto h-full w-full max-w-[680px] min-w-0 flex-1">
+        <main className="mx-auto flex h-full w-full max-w-[680px] min-w-0 flex-1 flex-col">
           <ErrorBanner />
-          <Routes>
-            <Route path="/j/:token" element={<Invite />} />
-            <Route
-              path="/"
-              element={
-                <Protected>
-                  <Lists />
-                </Protected>
-              }
-            />
-            <Route
-              path="/l/:id"
-              element={
-                <Protected>
-                  <ListDetail />
-                </Protected>
-              }
-            />
-            <Route
-              path="/l/:id/settings"
-              element={
-                <Protected>
-                  <ListSettings />
-                </Protected>
-              }
-            />
-            <Route
-              path="/l/:id/share"
-              element={
-                <Protected>
-                  <Share />
-                </Protected>
-              }
-            />
-            <Route
-              path="/l/:id/stats"
-              element={
-                <Protected>
-                  <Stats />
-                </Protected>
-              }
-            />
-            <Route path="*" element={<Navigate to="/" replace />} />
-          </Routes>
+          {/* The screen takes whatever the update bar leaves, which is all of it
+              until there is something to say. */}
+          <div className="min-h-0 flex-1">
+            <Routes>
+              <Route path="/j/:token" element={<Invite />} />
+              <Route
+                path="/"
+                element={
+                  <Protected>
+                    <Lists />
+                  </Protected>
+                }
+              />
+              <Route
+                path="/l/:id"
+                element={
+                  <Protected>
+                    <ListDetail />
+                  </Protected>
+                }
+              />
+              <Route
+                path="/l/:id/settings"
+                element={
+                  <Protected>
+                    <ListSettings />
+                  </Protected>
+                }
+              />
+              <Route
+                path="/l/:id/share"
+                element={
+                  <Protected>
+                    <Share />
+                  </Protected>
+                }
+              />
+              <Route
+                path="/l/:id/stats"
+                element={
+                  <Protected>
+                    <Stats />
+                  </Protected>
+                }
+              />
+              <Route path="*" element={<Navigate to="/" replace />} />
+            </Routes>
+          </div>
+          <UpdateBar />
           <InstallPrompt />
         </main>
       </div>
