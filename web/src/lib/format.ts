@@ -1,4 +1,4 @@
-import type { Completion, ListSchedule } from '@tally/shared';
+import type { Completion, ListSchedule, ListSummary } from '@tally/shared';
 
 /** Everything the UI says about time, in one place so the wording stays consistent. */
 
@@ -123,6 +123,31 @@ export function cadenceLabel(schedule: ListSchedule): string {
     case 'every_n_days':
       return `Every ${schedule.cadenceIntervalDays} days · resets ${at}`;
   }
+}
+
+/** "daily", "every 3 days" — the cadence alone, where a whole sentence won't fit. */
+export function cadenceShort(schedule: Pick<ListSchedule, 'cadence' | 'cadenceIntervalDays'>): string {
+  switch (schedule.cadence) {
+    case 'none':
+      return 'never resets';
+    case 'daily':
+      return 'daily';
+    case 'weekly':
+      return 'weekly';
+    case 'monthly':
+      return 'monthly';
+    case 'every_n_days':
+      return `every ${schedule.cadenceIntervalDays} days`;
+  }
+}
+
+/** "3 of 5 · daily" — a whole list on one line, for the desktop sidebar. */
+export function listSummaryLine(
+  list: Pick<ListSummary, 'doneCount' | 'taskCount' | 'cadence' | 'cadenceIntervalDays'>,
+): string {
+  // "0 of 0" reads like a failure rather than an empty list.
+  const progress = list.taskCount === 0 ? 'No tasks' : `${list.doneCount} of ${list.taskCount}`;
+  return `${progress} · ${cadenceShort(list)}`;
 }
 
 /**

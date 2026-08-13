@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest';
 import type { ListSchedule } from '@tally/shared';
 import {
   cadenceLabel,
+  cadenceShort,
   initialOf,
+  listSummaryLine,
   offlineLabel,
   resetPreview,
   resetsInLabel,
@@ -119,6 +121,40 @@ describe('cadenceLabel', () => {
     expect(cadenceLabel({ ...schedule, resetHour: 0 })).toBe('Daily · resets midnight');
     expect(cadenceLabel({ ...schedule, resetHour: 12 })).toBe('Daily · resets noon');
     expect(cadenceLabel({ ...schedule, resetHour: 17 })).toBe('Daily · resets 5:00pm');
+  });
+});
+
+describe('cadenceShort', () => {
+  it('drops the reset hour, which the sidebar has no room for', () => {
+    expect(cadenceShort(schedule)).toBe('daily');
+    expect(cadenceShort({ ...schedule, cadence: 'weekly' })).toBe('weekly');
+    expect(cadenceShort({ ...schedule, cadence: 'monthly' })).toBe('monthly');
+    expect(cadenceShort({ ...schedule, cadence: 'every_n_days' })).toBe('every 3 days');
+    expect(cadenceShort({ ...schedule, cadence: 'none' })).toBe('never resets');
+  });
+
+  it('ignores the reset hour, which cadenceLabel spells out instead', () => {
+    const evening: ListSchedule = { ...schedule, resetHour: 17 };
+    expect(cadenceShort(evening)).toBe('daily');
+    expect(cadenceLabel(evening)).toBe('Daily · resets 5:00pm');
+  });
+});
+
+describe('listSummaryLine', () => {
+  const list = { ...schedule, doneCount: 3, taskCount: 5 };
+
+  it('reads as the sidebar shows it', () => {
+    expect(listSummaryLine(list)).toBe('3 of 5 · daily');
+  });
+
+  it('follows the cadence, not just the count', () => {
+    expect(listSummaryLine({ ...list, cadence: 'every_n_days', doneCount: 0, taskCount: 1 })).toBe(
+      '0 of 1 · every 3 days',
+    );
+  });
+
+  it('says there are no tasks rather than "0 of 0"', () => {
+    expect(listSummaryLine({ ...list, doneCount: 0, taskCount: 0 })).toBe('No tasks · daily');
   });
 });
 
