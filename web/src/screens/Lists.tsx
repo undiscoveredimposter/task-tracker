@@ -10,6 +10,7 @@ import {
   AvatarStack,
   BottomBar,
   EmptyState,
+  OfflineBanner,
   PlusIcon,
   ProgressBar,
   Sheet,
@@ -18,7 +19,7 @@ import {
 
 export function Lists() {
   const { me, signOut } = useAuth();
-  const { lists, listsLoading, setList } = useData();
+  const { lists, listsLoading, setList, online, pending, savedAt } = useData();
   const [creating, setCreating] = useState(false);
   const [name, setName] = useState('');
   const [emoji, setEmoji] = useState<string>(LIST_EMOJI[0]);
@@ -63,11 +64,20 @@ export function Lists() {
         </button>
       </div>
 
+      <OfflineBanner online={online} pending={pending} savedAt={savedAt} />
+
       {listsLoading ? (
         <div className="flex flex-col gap-3 px-4">
           <Skeleton className="h-[118px]" />
           <Skeleton className="h-[118px]" />
         </div>
+      ) : lists.length === 0 && !online && savedAt === null ? (
+        // No signal and nothing saved yet — an empty account and an unreachable
+        // one look identical from here, so don't claim to know which it is.
+        // No icon, like the app's other "something is wrong" states.
+        <EmptyState title="Nothing saved on this device">
+          Your lists will be here once you have a connection again.
+        </EmptyState>
       ) : lists.length === 0 ? (
         <EmptyState
           title="Nothing to keep track of yet"
