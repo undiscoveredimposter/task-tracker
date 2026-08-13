@@ -15,7 +15,9 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="Tally" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <link rel="apple-touch-icon" href="/icon.svg" />
+    <!-- iOS only accepts a PNG here. Given an SVG it silently falls back to a
+         screenshot of the page as the home-screen icon. -->
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
     <title>Tally</title>
   </head>
   <body>
