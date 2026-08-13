@@ -30,8 +30,43 @@ status:ready         ──►     claims it
 | `infra-agent` | Docker, `.github/`, docs, root scripts | application code |
 | `pr-reviewer` | reviews and merges | writes no application code |
 
-Run one with the Agent tool, by name — for example *"run the backend-agent"*. Each takes a
-single work item, carries it to a pull request, and stops. Run it again for the next one.
+Each has a slash command of the same name:
+
+```
+/frontend-agent          take the next area:frontend item to a pull request
+/backend-agent           take the next area:backend item to a pull request
+/infra-agent             take the next area:infra item to a pull request
+/pr-reviewer             review what's waiting; merge what holds up
+
+/backend-agent 8         work one specific issue instead of the next one
+/pr-reviewer 23          review one specific pull request
+```
+
+Each run takes a single work item, carries it to a pull request, and stops. Run it again for
+the next one — or put it on a loop:
+
+```
+/loop 20m /backend-agent
+```
+
+The commands are built for that: each run is self-contained, and an empty backlog is a
+normal outcome that reports "nothing ready" and stops rather than inventing work. They run
+the agent in the foreground deliberately, so a tick finishes before the next begins —
+otherwise a second agent would start while the first still holds a claimed issue and a
+half-finished branch.
+
+Run one loop per area, plus a reviewer loop. Do **not** run two loops of the same agent:
+they will collide on the same issue and branch.
+
+A sensible unattended setup is three area loops on a long interval and a reviewer loop on a
+shorter one, so finished work doesn't sit waiting:
+
+```
+/loop 30m /frontend-agent
+/loop 30m /backend-agent
+/loop 30m /infra-agent
+/loop 10m /pr-reviewer
+```
 
 The three development agents own disjoint directories, so they can run at the same time
 without conflicting. They coordinate through issues, never by editing each other's area: if
