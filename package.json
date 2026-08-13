@@ -16,7 +16,7 @@
     "build": "npm run build -w @tally/shared && npm run build -w @tally/server && npm run build -w @tally/web",
     "dev": "npm run dev -w @tally/server & npm run dev -w @tally/web",
     "start": "npm run start -w @tally/server",
-    "test": "npm run test -w @tally/server",
-    "typecheck": "npm run typecheck -w @tally/server && npm run typecheck -w @tally/web"
+    "test": "npm run test -w @tally/server && npm run test -w @tally/web",
+    "typecheck": "npm run build -w @tally/shared && npm run typecheck -w @tally/server && npm run typecheck -w @tally/web"
   }
 }
