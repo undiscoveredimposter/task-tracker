@@ -57,13 +57,13 @@ function Shell() {
   const chrome = Boolean(me) && !location.pathname.startsWith('/j/');
 
   return (
-    <div className="flex h-full flex-col">
+    <div className={`flex h-full flex-col ${chrome ? 'has-sidebar' : ''}`}>
       {chrome && <DesktopTopBar />}
       <div className="flex min-h-0 flex-1">
         {chrome && <DesktopSidebar />}
         {/* The column is capped so a row never stretches to the far edge of a
             laptop; on a phone this is simply the full width. */}
-        <main className="mx-auto flex h-full w-full max-w-[680px] min-w-0 flex-1 flex-col">
+        <main className="mx-auto flex h-full w-full max-w-column min-w-0 flex-1 flex-col">
           <ErrorBanner />
           {/* The screen takes whatever the update bar leaves, which is all of it
               until there is something to say. */}

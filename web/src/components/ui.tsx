@@ -194,11 +194,14 @@ export function Sheet({
         onClick={onClose}
         className="anim-fadein absolute inset-0 bg-black/55"
       />
+      {/* Edge to edge on a phone. On a laptop it takes the width and the place
+          of the task column it belongs to, because a form that is one text
+          input stretched across 1400px is not one anyone wants to fill in. */}
       <div
         role="dialog"
         aria-modal="true"
         aria-label={title}
-        className="anim-sheet absolute inset-x-0 bottom-0 rounded-t-3xl bg-surface px-5 pt-2 pb-[calc(env(safe-area-inset-bottom)+24px)] shadow-[0_-12px_40px_rgba(0,0,0,.4)]"
+        className="anim-sheet absolute right-0 bottom-0 left-[var(--sidebar-width,0px)] mx-auto max-w-column rounded-t-3xl bg-surface px-5 pt-2 pb-[calc(env(safe-area-inset-bottom)+24px)] shadow-[0_-12px_40px_rgba(0,0,0,.4)]"
       >
         <div className="flex justify-center pt-1 pb-3">
           <span className="h-1.5 w-10 rounded-full bg-outline" />
