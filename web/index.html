@@ -9,8 +9,36 @@
       content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=5"
     />
     <meta name="description" content="Tick it off once, everyone knows it is done." />
-    <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f3f5fe" />
-    <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#161826" />
+    <!-- One tag rather than a pair keyed on prefers-color-scheme, because the
+         chosen theme can now disagree with the operating system. The script
+         below sets it, and src/lib/theme.ts keeps it right from then on. -->
+    <meta name="theme-color" content="#f3f5fe" />
+    <script>
+      /* Applies the stored theme before the first paint. A module or a React
+         effect is a frame too late: anyone who chose dark gets a white flash on
+         every launch, which is exactly what they picked dark to avoid.
+
+         The two ground colours are deliberately duplicated from
+         src/lib/theme.ts — nothing else has parsed by this point. */
+      (function () {
+        try {
+          var choice = localStorage.getItem('tally.theme');
+          if (choice !== 'light' && choice !== 'dark') choice = 'system';
+          /* System sets no attribute at all, leaving the palette to the
+             prefers-color-scheme rules in index.css. */
+          if (choice !== 'system') document.documentElement.setAttribute('data-theme', choice);
+
+          var dark =
+            choice === 'dark' ||
+            (choice === 'system' && matchMedia('(prefers-color-scheme: dark)').matches);
+          document
+            .querySelector('meta[name="theme-color"]')
+            .setAttribute('content', dark ? '#161826' : '#f3f5fe');
+        } catch (error) {
+          /* Storage blocked. The light default in the tag above still stands. */
+        }
+      })();
+    </script>
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="Tally" />
