@@ -60,6 +60,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
+  /* Offline with nothing saved, the fetch above failed and there is no profile
+     to render anything with. Firebase won't call back again — the session was
+     already restored — so the return of the network is the only cue left. */
+  useEffect(() => {
+    if (me || !firebaseUser) return;
+
+    const retry = () => {
+      api
+        .me()
+        .then((profile) => {
+          setMe(profile);
+          setError(null);
+        })
+        .catch(() => undefined);
+    };
+    window.addEventListener('online', retry);
+    return () => window.removeEventListener('online', retry);
+  }, [me, firebaseUser]);
+
   const value = useMemo<AuthState>(
     () => ({
       loading,

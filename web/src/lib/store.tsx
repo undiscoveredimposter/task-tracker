@@ -11,7 +11,7 @@ import {
 import type { ListDetail, ListSummary, ServerEvent, Task } from '@tally/shared';
 import { ApiError, api, OfflineError } from './api';
 import { useAuth } from './auth';
-import { readCache, restoreSnapshot } from './cache';
+import { readCache, restoreSnapshot, savedAtFor, snapshotToPersist, type SavedMark } from './cache';
 import { auth } from './firebase';
 import { Outbox, type PendingTick } from './outbox';
 import { connectStream } from './stream';
@@ -47,7 +47,8 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const [connected, setConnected] = useState(false);
   const [online, setOnline] = useState(() => navigator.onLine);
   const [pending, setPending] = useState(0);
-  const [savedAt, setSavedAt] = useState<number | null>(null);
+  const [saved, setSaved] = useState<SavedMark | null>(null);
+  const savedAt = savedAtFor(saved, uid);
 
   const outbox = useRef<Outbox>(
     new Outbox(
@@ -57,30 +58,36 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const hydratedFor = useRef<string | null>(null);
   const lastUid = useRef<string | null>(null);
 
+  /* Both fetches stamp what came back with the account it came back for. The
+     closure's uid is the right one even if the signed-in account has moved on
+     mid-flight — it names whose data this is, not who is looking. */
   const refreshLists = useCallback(async () => {
     try {
       setLists(await api.lists());
-      setSavedAt(Date.now());
+      if (uid) setSaved({ uid, at: Date.now() });
       setError(null);
     } catch (cause) {
       if (!(cause instanceof OfflineError)) setError((cause as Error).message);
     } finally {
       setListsLoading(false);
     }
-  }, []);
+  }, [uid]);
 
-  const loadList = useCallback(async (id: string) => {
-    try {
-      const detail = await api.list(id);
-      setDetails((current) => ({ ...current, [id]: detail }));
-      setSavedAt(Date.now());
-      setError(null);
-      return detail;
-    } catch (cause) {
-      if (!(cause instanceof OfflineError)) setError((cause as Error).message);
-      return undefined;
-    }
-  }, []);
+  const loadList = useCallback(
+    async (id: string) => {
+      try {
+        const detail = await api.list(id);
+        setDetails((current) => ({ ...current, [id]: detail }));
+        if (uid) setSaved({ uid, at: Date.now() });
+        setError(null);
+        return detail;
+      } catch (cause) {
+        if (!(cause instanceof OfflineError)) setError((cause as Error).message);
+        return undefined;
+      }
+    },
+    [uid],
+  );
 
   const setList = useCallback((detail: ListDetail) => {
     setDetails((current) => ({ ...current, [detail.id]: detail }));
@@ -182,7 +189,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
       hydratedFor.current = null;
       setLists([]);
       setDetails({});
-      setSavedAt(null);
+      setSaved(null);
       setPending(0);
       setListsLoading(true);
     }
@@ -202,17 +209,18 @@ export function DataProvider({ children }: { children: ReactNode }) {
     const restored = restoreSnapshot(snapshot, outbox.current.pending);
     setLists(restored.lists);
     setDetails(restored.details);
-    setSavedAt(snapshot.savedAt);
+    setSaved({ uid, at: snapshot.savedAt });
     setListsLoading(false);
   }, [uid]);
 
-  /* Keep that copy up to date, optimistic ticks included. `savedAt` travels
-     with the data rather than being the moment of the write, so a copy that has
-     sat offline all morning still says when it was last true. */
+  /* Keep that copy up to date, optimistic ticks included. The mark travels with
+     the data rather than being the moment of the write, so a copy that has sat
+     offline all morning still says when it was last true — and says whose it is,
+     which is what stops one account's lists reaching another's disk. */
   useEffect(() => {
-    if (!uid || !me || savedAt === null) return;
-    readCache.write({ uid, me, savedAt, lists, details });
-  }, [uid, me, savedAt, lists, details]);
+    const snapshot = snapshotToPersist(uid, me, saved, lists, details);
+    if (snapshot) readCache.write(snapshot);
+  }, [uid, me, saved, lists, details]);
 
   /* Initial load. */
   useEffect(() => {

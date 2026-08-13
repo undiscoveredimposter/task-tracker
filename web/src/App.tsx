@@ -14,12 +14,20 @@ import { Stats } from './screens/Stats';
 
 /** Anything behind sign-in. Invite links are deliberately not in here. */
 function Protected({ children }: { children: React.ReactNode }) {
-  const { loading, me, error } = useAuth();
+  const { loading, me, error, firebaseUser } = useAuth();
 
   if (loading) return <ListSkeleton />;
 
   if (error && !me) {
-    return (
+    // Firebase having handed us a user means the build is configured — it
+    // verified a session. So the failure is our API not answering, and telling
+    // someone in a basement to check their build variables is nonsense. Without
+    // a firebaseUser the config advice is the right advice.
+    return firebaseUser ? (
+      <EmptyState title="Nothing saved on this device">
+        {error}. Your lists will be here once Tally can reach the server again.
+      </EmptyState>
+    ) : (
       <EmptyState title="Tally isn't set up yet">
         {error} Check the Firebase build variables and redeploy.
       </EmptyState>

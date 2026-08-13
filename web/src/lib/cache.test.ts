@@ -1,6 +1,13 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import type { ListDetail, ListSummary, Me, Task } from '@tally/shared';
-import { CACHE_VERSION, ReadCache, restoreSnapshot, type CachedSnapshot } from './cache';
+import {
+  CACHE_VERSION,
+  ReadCache,
+  restoreSnapshot,
+  savedAtFor,
+  snapshotToPersist,
+  type CachedSnapshot,
+} from './cache';
 import type { PendingTick } from './outbox';
 
 class MemoryStorage {
@@ -262,5 +269,59 @@ describe('restoreSnapshot', () => {
     );
 
     expect(restored.details.home?.doneCount).toBe(0);
+  });
+});
+
+/* The shared-tablet case the issue calls out. The timestamp names the account
+   its data came from, so a write can't be misattributed to whoever is signed in
+   by the time it happens. */
+describe('savedAtFor', () => {
+  it('gives the timestamp back when the data belongs to the account on screen', () => {
+    expect(savedAtFor({ uid: 'firebase-alex', at: NOW }, 'firebase-alex')).toBe(NOW);
+  });
+
+  it('withholds it when the data was fetched under another account', () => {
+    expect(savedAtFor({ uid: 'firebase-alex', at: NOW }, 'firebase-sam')).toBeNull();
+  });
+
+  it('withholds it when nobody is signed in', () => {
+    expect(savedAtFor({ uid: 'firebase-alex', at: NOW }, null)).toBeNull();
+  });
+
+  it('has nothing to give before anything has matched the server', () => {
+    expect(savedAtFor(null, 'firebase-alex')).toBeNull();
+  });
+});
+
+describe('snapshotToPersist', () => {
+  const detail = home([task('feed')]);
+  const lists = [summaryOf(detail)];
+  const details = { home: detail };
+  const mark = { uid: 'firebase-alex', at: NOW };
+
+  it('writes what is on screen, stamped with when it was last true', () => {
+    expect(snapshotToPersist('firebase-alex', alex, mark, lists, details)).toEqual({
+      uid: 'firebase-alex',
+      me: alex,
+      savedAt: NOW,
+      lists,
+      details,
+    });
+  });
+
+  it("refuses to write one account's lists under another account's uid", () => {
+    expect(snapshotToPersist('firebase-sam', alex, mark, lists, details)).toBeNull();
+  });
+
+  it('writes nothing while signed out', () => {
+    expect(snapshotToPersist(null, alex, mark, lists, details)).toBeNull();
+  });
+
+  it('waits for the profile the copy is keyed to', () => {
+    expect(snapshotToPersist('firebase-alex', null, mark, lists, details)).toBeNull();
+  });
+
+  it('does not save a screen that has never matched the server', () => {
+    expect(snapshotToPersist('firebase-alex', alex, null, lists, details)).toBeNull();
   });
 });

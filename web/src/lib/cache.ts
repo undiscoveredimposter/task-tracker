@@ -109,6 +109,46 @@ export const readCache = new ReadCache(
   typeof window === 'undefined' ? noStorage : window.localStorage,
 );
 
+/**
+ * When the data on screen last matched the server, and whose data it is.
+ *
+ * The uid travels with the timestamp rather than being read from a closure at
+ * write time: a fetch is tagged with the account it was made under, so nothing
+ * downstream has to trust that the signed-in account hasn't changed since.
+ */
+export interface SavedMark {
+  uid: string;
+  at: number;
+}
+
+/** The timestamp, but only for the account it actually belongs to. */
+export function savedAtFor(saved: SavedMark | null, uid: string | null): number | null {
+  return saved && saved.uid === uid ? saved.at : null;
+}
+
+/**
+ * What should be written to disk for `uid`, or null when nothing should be.
+ *
+ * The refusal that matters is the last one. React schedules the sign-out wipe
+ * and this write in the same commit, and an effect sees the state from the
+ * commit it was scheduled in — so on a straight A → B account switch this would
+ * otherwise run with B's uid and A's still-unwiped lists, and hand them back on
+ * B's next launch. Comparing the owner carried by the data catches that; a
+ * guard derived from `uid` alone is a commit behind the thing it protects.
+ */
+export function snapshotToPersist(
+  uid: string | null,
+  me: Me | null,
+  saved: SavedMark | null,
+  lists: ListSummary[],
+  details: Record<string, ListDetail>,
+): Omit<CachedSnapshot, 'version'> | null {
+  if (!uid || !me) return null;
+  const savedAt = savedAtFor(saved, uid);
+  if (savedAt === null) return null;
+  return { uid, me, savedAt, lists, details };
+}
+
 /** Period keys are computed server-side; all a device can tell is that its own has run out. */
 function periodHasPassed(resetsAt: string | null, now: number): boolean {
   if (!resetsAt) return false; // cadence 'none' — a plain checklist that never clears
