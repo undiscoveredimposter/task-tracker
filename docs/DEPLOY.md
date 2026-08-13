@@ -167,7 +167,7 @@ not.
 
 `NODE_ENV=production`, `PORT=8080` and `WEB_ROOT` are baked into the image and
 set again in the compose file. Leave them alone —
-[see below](#nodeenvproduction-is-a-security-control).
+[see below](#node_envproduction-is-a-security-control).
 
 **`FIREBASE_PRIVATE_KEY`** is a multi-line PEM. Coolify stores it with literal
 `\n` escapes and the server unescapes them, so paste it either as the raw

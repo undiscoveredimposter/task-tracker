@@ -87,21 +87,23 @@ when the server boots, so there is no setup step.
 ### 3. Configure
 
 ```bash
-cp .env.example .env
+cp .env.example .env          # gitignored
 ```
 
 `.env.example` documents every variable, which are secret, and — importantly —
-which are read at *build* time rather than runtime. For local work the
-defaults are fine except `DATABASE_URL`.
+which are read at *build* time rather than runtime. For local work the defaults
+are fine; set `DATABASE_URL` to your database and `TALLY_DEV_AUTH=1` to work
+without a Firebase project.
+
+Nothing loads that file implicitly — there is no `dotenv` in the dependency
+tree. Node reads it when you ask it to, with `--env-file`, which is how the
+commands below start the server.
 
 ### 4. Run the API
 
 ```bash
-npm run build                                  # or: npm run build -w @tally/server
-DATABASE_URL=postgresql://tally:tally@127.0.0.1:5432/tally \
-TALLY_DEV_AUTH=1 \
-APP_ORIGIN=http://localhost:5173 \
-npm start
+npm run build -w @tally/shared -w @tally/server
+node --env-file=.env server/dist/index.js
 ```
 
 It applies migrations, then listens on `:8080`:
@@ -163,13 +165,18 @@ What production does — one process, one origin, no proxy:
 npm run build
 DATABASE_URL=postgresql://tally:tally@127.0.0.1:5432/tally \
 TALLY_DEV_AUTH=1 \
-WEB_ROOT="$PWD/web/dist" \
 APP_ORIGIN=http://localhost:8080 \
-npm start
+WEB_ROOT="$PWD/web/dist" \
+node server/dist/index.js
 ```
 
-The whole app is then on <http://localhost:8080>. `WEB_ROOT` must be absolute:
-`npm start` runs inside `server/`, so a relative path resolves from there.
+The whole app is then on <http://localhost:8080>.
+
+> **`WEB_ROOT` must be an absolute path.** Give it a relative one and the
+> failure is split in half: assets serve fine, but every page navigation
+> returns `500 path must be absolute or specify root to res.sendFile`. The
+> deployed image sets an absolute path, so this only bites locally. Tracked in
+> [#36](https://github.com/undiscoveredimposter/task-tracker/issues/36).
 
 ### The whole stack in Docker
 
