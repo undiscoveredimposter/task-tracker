@@ -1,0 +1,89 @@
+import assert from 'node:assert/strict';
+import { after, before, describe, it } from 'node:test';
+import { SKIP_REASON, startHarness, type Harness } from './helpers/harness.ts';
+
+/**
+ * Migrations run on container boot, before the port opens. Two things have to
+ * hold or a deploy is a coin toss: they must build the schema from nothing, and
+ * running them again — every restart, every replica — must change nothing.
+ */
+describe('migrations', { skip: SKIP_REASON }, () => {
+  let h: Harness;
+
+  before(async () => {
+    // Deliberately unmigrated: this suite drives migrate() itself.
+    h = await startHarness({ migrate: false });
+  });
+
+  after(async () => {
+    await h?.close();
+  });
+
+  it('starts from a genuinely empty schema', async () => {
+    assert.deepEqual(await h.tableNames(), []);
+    assert.equal(await h.appliedMigrations(), null);
+  });
+
+  it('builds the whole schema from empty', async () => {
+    await h.migrate();
+
+    assert.deepEqual(await h.tableNames(), [
+      'invites',
+      'list_members',
+      'lists',
+      'schema_migrations',
+      'task_completions',
+      'tasks',
+      'users',
+    ]);
+    assert.deepEqual(await h.appliedMigrations(), ['001_init.sql']);
+  });
+
+  it('keeps UNIQUE (task_id, period_key), which is what makes ticking idempotent', async () => {
+    const { rows } = await h.sql.query<{ columns: string[] }>(
+      // ::text because attname is of type `name`, which the driver hands back
+      // unparsed as a raw array literal.
+      `SELECT array_agg(a.attname::text ORDER BY a.attname) AS columns
+         FROM pg_constraint c
+         JOIN pg_class t ON t.oid = c.conrelid
+         JOIN pg_namespace n ON n.oid = t.relnamespace
+         JOIN pg_attribute a ON a.attrelid = t.oid AND a.attnum = ANY (c.conkey)
+        WHERE n.nspname = $1 AND t.relname = 'task_completions' AND c.contype = 'u'
+        GROUP BY c.conname`,
+      [h.schema],
+    );
+
+    assert.deepEqual(
+      rows.map((row) => row.columns),
+      [['period_key', 'task_id']],
+      'the unique constraint the whole reset mechanism rests on has moved or gone',
+    );
+  });
+
+  it('applying a second time is a no-op and leaves data alone', async () => {
+    const before = await h.sql.query('SELECT * FROM schema_migrations');
+    await h.sql.query(
+      `INSERT INTO users (firebase_uid, email, display_name) VALUES ('survivor', 'a@b.test', 'Survivor')`,
+    );
+
+    await h.migrate();
+
+    const after = await h.sql.query('SELECT * FROM schema_migrations');
+    assert.deepEqual(await h.appliedMigrations(), ['001_init.sql']);
+    assert.equal(after.rowCount, before.rowCount);
+
+    const users = await h.sql.query('SELECT firebase_uid FROM users');
+    assert.deepEqual(
+      users.rows.map((row) => row.firebase_uid),
+      ['survivor'],
+      're-running migrations must not touch existing rows',
+    );
+  });
+
+  it('is safe to run concurrently, the way two booting containers would', async () => {
+    // The advisory lock in migrate() is what makes this survive: the second and
+    // third callers wait, then find nothing left to apply.
+    await Promise.all([h.migrate(), h.migrate(), h.migrate()]);
+    assert.deepEqual(await h.appliedMigrations(), ['001_init.sql']);
+  });
+});

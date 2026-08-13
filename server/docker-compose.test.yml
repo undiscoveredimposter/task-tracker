@@ -1,0 +1,28 @@
+# Throwaway Postgres for the integration tests.
+#
+#   npm run test:db      -w @tally/server   start it and run the whole suite
+#   npm run test:db:down -w @tally/server   stop it and forget everything
+#
+# Nothing in here is meant to survive: the data lives in a tmpfs, so the
+# container starts clean and the suite runs faster for it. Port 55433 rather
+# than 5432 so it can't collide with a Postgres you already have running.
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: tally-test-db
+    environment:
+      POSTGRES_USER: tally
+      POSTGRES_PASSWORD: tally
+      POSTGRES_DB: tally_test
+      # Safe here and nowhere else: this database is disposable by design.
+      POSTGRES_INITDB_ARGS: '--nosync'
+    command: ['postgres', '-c', 'fsync=off', '-c', 'full_page_writes=off', '-c', 'synchronous_commit=off']
+    ports:
+      - '127.0.0.1:55433:5432'
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U tally -d tally_test']
+      interval: 1s
+      timeout: 3s
+      retries: 30
