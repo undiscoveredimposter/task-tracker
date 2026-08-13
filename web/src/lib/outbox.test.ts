@@ -9,6 +9,12 @@ class MemoryStorage {
   setItem(key: string, value: string): void {
     this.data.set(key, value);
   }
+  removeItem(key: string): void {
+    this.data.delete(key);
+  }
+  has(key: string): boolean {
+    return this.data.has(key);
+  }
   raw(key: string): string | null {
     return this.getItem(key);
   }
@@ -169,5 +175,12 @@ describe('Outbox', () => {
     outbox.clear();
     expect(outbox.size).toBe(0);
     expect(new Outbox(storage).size).toBe(0);
+  });
+
+  it('leaves no key behind when cleared, so sign-out really does clear it', () => {
+    const outbox = new Outbox(storage);
+    outbox.enqueue(tick('feed'));
+    outbox.clear();
+    expect(storage.has('tally.outbox')).toBe(false);
   });
 });

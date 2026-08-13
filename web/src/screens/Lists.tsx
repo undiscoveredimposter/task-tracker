@@ -10,6 +10,7 @@ import {
   AvatarStack,
   BottomBar,
   EmptyState,
+  OfflineBanner,
   PlusIcon,
   ProgressBar,
   Skeleton,
@@ -17,7 +18,7 @@ import {
 
 export function Lists() {
   const { me, signOut } = useAuth();
-  const { lists, listsLoading } = useData();
+  const { lists, listsLoading, online, pending, savedAt } = useData();
   const [creating, setCreating] = useState(false);
 
   return (
@@ -34,6 +35,10 @@ export function Lists() {
         </button>
       </div>
 
+      {/* Outside the scroll container: whether what follows is current is the
+          first thing to know about it, so it must not scroll away. */}
+      <OfflineBanner online={online} pending={pending} savedAt={savedAt} />
+
       {/* Appearance rides at the end of the scroll rather than in the header.
           It gets chosen once and then never again, so it must not compete with
           the lists for the top of a 375px screen. Whichever branch precedes it
@@ -44,6 +49,13 @@ export function Lists() {
             <Skeleton className="h-[118px]" />
             <Skeleton className="h-[118px]" />
           </div>
+        ) : lists.length === 0 && !online && savedAt === null ? (
+          // No signal and nothing saved yet — an empty account and an unreachable
+          // one look identical from here, so don't claim to know which it is.
+          // No icon, like the app's other "something is wrong" states.
+          <EmptyState title="Nothing saved on this device">
+            Your lists will be here once you have a connection again.
+          </EmptyState>
         ) : lists.length === 0 ? (
           <EmptyState
             title="Nothing to keep track of yet"
