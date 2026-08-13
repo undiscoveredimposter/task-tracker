@@ -1,13 +1,12 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
-import { registerSW } from 'virtual:pwa-register';
 import { App } from './App';
 import { watchSystemTheme } from './lib/theme';
 import './index.css';
 
-// A new build is picked up on the next launch rather than reloading under
-// someone's finger mid-tick.
-registerSW({ immediate: false });
+// The service worker registers itself from lib/serviceWorker, which UpdateBar
+// imports — a new build waits there until someone taps Reload, rather than
+// swapping the page out under their finger mid-tick.
 
 // The boot script in index.html has already applied the stored theme. This only
 // catches the operating system flipping while the app is open — CSS follows on
