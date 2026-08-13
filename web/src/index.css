@@ -34,7 +34,9 @@
   --t-ground: #f3f5fe;
   --t-surface: #fdfdff;
   --t-ink: #292b31;
-  --t-muted: rgba(41, 43, 49, 0.6);
+  /* 0.68, not the 0.6 this started at: below that it lands under 4.5:1 on
+     every surface it is used on. See lib/contrast.test.ts. */
+  --t-muted: rgba(41, 43, 49, 0.68);
   --t-accent: #5d5294;
   --t-accent-ink: #423a6a;
   --t-divider: rgba(41, 43, 49, 0.14);
@@ -42,7 +44,9 @@
   --t-tint-2: #e4e7f5;
   --t-tint-3: #d2cefd;
   --t-track: #e4e7f5;
-  --t-outline: #b2b6ca;
+  /* The ring on an unticked task. It is the only thing drawing the outstanding
+     state, so it is a control's shape rather than decoration and owes 3:1. */
+  --t-outline: #8288a3;
   --t-check-ink: #f5f4ff;
   --t-danger: #9c4038;
   --t-toast-bg: #292b31;
@@ -66,7 +70,7 @@
     --t-tint-2: #292b31;
     --t-tint-3: #423a6a;
     --t-track: #2c2e3d;
-    --t-outline: #595d6c;
+    --t-outline: #727892;
     --t-check-ink: #161826;
     --t-danger: #e09088;
     --t-toast-bg: #e4e7f5;
@@ -89,7 +93,7 @@
   --t-tint-2: #292b31;
   --t-tint-3: #423a6a;
   --t-track: #2c2e3d;
-  --t-outline: #595d6c;
+  --t-outline: #727892;
   --t-check-ink: #161826;
   --t-danger: #e09088;
   --t-toast-bg: #e4e7f5;
@@ -195,6 +199,14 @@ body {
   outline-offset: 2px;
 }
 
+/* The scrim behind a sheet. ::backdrop lives in the top layer, where no class
+   on the dialog can reach it, so it is styled here instead. The same dimming in
+   both themes on purpose — it is shadow, not paint. */
+dialog::backdrop {
+  background: rgba(0, 0, 0, 0.55);
+  animation: fadein 0.2s ease-out;
+}
+
 /* ── Motion ──────────────────────────────────────────────────────────────── */
 
 @keyframes pop {
@@ -282,7 +294,8 @@ body {
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
-  *::after {
+  *::after,
+  *::backdrop {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;

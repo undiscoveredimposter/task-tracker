@@ -1,6 +1,7 @@
-import type { ReactNode } from 'react';
+import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import type { UserRef } from '@tally/shared';
+import { holdFocus } from '../lib/a11y';
 import { initialOf } from '../lib/format';
 
 /* ── Icons ───────────────────────────────────────────────────────────────── */
@@ -164,12 +165,23 @@ export function ScreenHeader({
           <BackIcon />
         </Link>
       )}
-      <span className="truncate text-[22px] font-semibold tracking-tight">{title}</span>
+      <h1 className="truncate text-[22px] font-semibold tracking-tight">{title}</h1>
       {right && <div className="ml-auto flex items-center gap-1">{right}</div>}
     </div>
   );
 }
 
+/**
+ * A bottom sheet, on a real `<dialog>`.
+ *
+ * `showModal()` is doing the work that used to be missing: focus moves into the
+ * sheet, Tab stays inside it, Escape closes it, the page behind goes inert, and
+ * it paints above everything without entering the z-index argument. All of that
+ * is hand-rollable and none of it is worth hand-rolling.
+ *
+ * What the platform does *not* do is give focus back to the trigger when the
+ * element is unmounted rather than closed, so that part is ours.
+ */
 export function Sheet({
   title,
   onClose,
@@ -179,29 +191,61 @@ export function Sheet({
   onClose: () => void;
   children: ReactNode;
 }) {
+  const dialogRef = useRef<HTMLDialogElement>(null);
+  const titleId = useId();
+
+  // Taken on the render that first puts the sheet on screen, not in the effect
+  // below: React honours an `autoFocus` inside the sheet while committing, so
+  // by the time any effect runs the trigger has already lost focus to a field
+  // in here and there is nothing left to hand back to.
+  const [restoreFocus] = useState(() => holdFocus(document));
+
+  useEffect(() => {
+    const dialog = dialogRef.current;
+    if (!dialog) return;
+
+    // Whatever React's autoFocus chose, if anything. showModal ignores it —
+    // React applies autoFocus imperatively rather than as the attribute the
+    // dialog focusing steps look for — so it gets handed straight back.
+    const autoFocused = document.activeElement;
+    dialog.showModal();
+    if (autoFocused instanceof HTMLElement && dialog.contains(autoFocused)) autoFocused.focus();
+
+    return () => {
+      if (dialog.open) dialog.close();
+      restoreFocus();
+    };
+  }, [restoreFocus]);
+
   return (
-    <div className="fixed inset-0 z-30">
-      <button
-        type="button"
-        aria-label="Close"
-        onClick={onClose}
-        className="anim-fadein absolute inset-0 bg-black/55"
-      />
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-label={title}
-        className="anim-sheet absolute inset-x-0 bottom-0 rounded-t-3xl bg-surface px-5 pt-2 pb-[calc(env(safe-area-inset-bottom)+24px)] shadow-[0_-12px_40px_rgba(0,0,0,.4)]"
-      >
+    <dialog
+      ref={dialogRef}
+      aria-labelledby={titleId}
+      // Escape. Cancelling the browser's own close and going through onClose
+      // keeps React the one deciding whether the sheet is on screen.
+      onCancel={(event) => {
+        event.preventDefault();
+        onClose();
+      }}
+      // A click that lands on the dialog itself landed on the dimmed area above
+      // the sheet, or on the backdrop behind it. Both mean "not this one".
+      onClick={(event) => {
+        if (event.target === event.currentTarget) onClose();
+      }}
+      className="fixed inset-0 m-0 flex h-full max-h-none w-full max-w-none flex-col justify-end border-0 bg-transparent p-0"
+    >
+      <div className="anim-sheet max-h-full overflow-y-auto rounded-t-3xl bg-surface px-5 pt-2 pb-[calc(env(safe-area-inset-bottom)+24px)] shadow-[0_-12px_40px_rgba(0,0,0,.4)]">
         <div className="flex justify-center pt-1 pb-3">
-          <span className="h-1.5 w-10 rounded-full bg-outline" />
+          <span aria-hidden="true" className="h-1.5 w-10 rounded-full bg-outline" />
         </div>
         <div className="mb-4 flex items-center gap-3">
-          <span className="text-lg font-semibold">{title}</span>
+          <h2 id={titleId} className="text-lg font-semibold">
+            {title}
+          </h2>
           <button
             type="button"
             onClick={onClose}
-            aria-label="Close"
+            aria-label={`Close ${title}`}
             className="ml-auto flex size-11 items-center justify-center text-muted"
           >
             <CloseIcon />
@@ -209,7 +253,7 @@ export function Sheet({
         </div>
         {children}
       </div>
-    </div>
+    </dialog>
   );
 }
 

@@ -1,4 +1,5 @@
 import type { Task } from '@tally/shared';
+import { taskRowLabel } from '../lib/a11y';
 import { whoDidIt } from '../lib/format';
 import { CheckIcon } from './ui';
 
@@ -18,6 +19,10 @@ interface TaskRowProps {
  * The whole row is the target, not just the checkbox, and "done" is signalled
  * four ways at once — filled circle, drawn check, strikethrough and the
  * attribution line — so it never depends on colour alone.
+ *
+ * Read aloud it is one sentence rather than four fragments: the default name
+ * for a `checkbox` is its contents, which would run the title, the attribution
+ * and the notes together with no punctuation between them.
  */
 export function TaskRow({ task, meId, timezone, onToggle, onEdit, unsynced }: TaskRowProps) {
   const done = Boolean(task.completion);
@@ -27,6 +32,7 @@ export function TaskRow({ task, meId, timezone, onToggle, onEdit, unsynced }: Ta
       <div
         role="checkbox"
         aria-checked={done}
+        aria-label={taskRowLabel(task, meId, timezone, unsynced)}
         tabIndex={0}
         onClick={onToggle}
         onKeyDown={(event) => {

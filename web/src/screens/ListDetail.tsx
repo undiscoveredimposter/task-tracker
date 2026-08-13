@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { roleAtLeast, type Task } from '@tally/shared';
 import { api } from '../lib/api';
+import { syncMessage, undoAnnouncement } from '../lib/a11y';
 import { useAuth } from '../lib/auth';
 import { useData } from '../lib/store';
 import { resetsInLabel } from '../lib/format';
@@ -58,6 +59,7 @@ export function ListDetail() {
 
   const canEdit = roleAtLeast(list.role, 'editor');
   const isOwner = list.role === 'owner';
+  const sync = syncMessage(online, pending);
 
   const onToggle = (task: Task) => {
     toggleTask(list.id, task);
@@ -159,12 +161,22 @@ export function ListDetail() {
         </div>
       </div>
 
-      {(!online || pending > 0) && (
-        <div className="anim-fadein mx-4 mb-2.5 flex shrink-0 items-center gap-2.5 rounded-xl bg-tint px-3.5 py-2.5 text-[13px] font-medium text-accent-ink">
-          <OfflineIcon />
-          {pending > 0
-            ? `Offline — ${pending} tick${pending === 1 ? '' : 's'} waiting to sync`
-            : "Offline — you can still tick things off"}
+      {/* A live region has to already be in the page when its text changes, or
+          there was nothing there for assistive tech to be watching. Both of the
+          ones on this screen therefore render always and sit empty until there
+          is something to say, and the visible copies are hidden from the
+          accessible tree so nothing is read out twice. */}
+      <p role="status" className="sr-only">
+        {sync ?? ''}
+      </p>
+
+      {sync && (
+        <div
+          aria-hidden="true"
+          className="anim-fadein mx-4 mb-2.5 flex shrink-0 items-center gap-2.5 rounded-xl bg-tint px-3.5 py-2.5 text-[13px] font-medium text-accent-ink"
+        >
+          {!online && <OfflineIcon />}
+          {sync}
         </div>
       )}
 
@@ -196,16 +208,22 @@ export function ListDetail() {
         </div>
       )}
 
+      {/* The toast leaves on a timer nobody watching it can see, so the spoken
+          version says how long the undo will be there. */}
+      <p role="status" className="sr-only">
+        {justDone ? undoAnnouncement(justDone.title, UNDO_SECONDS) : ''}
+      </p>
+
       {justDone && (
-        <div
-          role="status"
-          className="anim-toast absolute inset-x-4 bottom-28 z-20 flex min-h-13 items-center gap-2.5 rounded-2xl bg-toast py-2 pr-2 pl-4 text-toast-ink shadow-[0_8px_24px_rgba(0,0,0,.35)] md:bottom-6"
-        >
-          <CheckIcon />
-          <span className="flex-1 truncate text-sm font-medium">{justDone.title} — done</span>
+        <div className="anim-toast absolute inset-x-4 bottom-28 z-20 flex min-h-13 items-center gap-2.5 rounded-2xl bg-toast py-2 pr-2 pl-4 text-toast-ink shadow-[0_8px_24px_rgba(0,0,0,.35)] md:bottom-6">
+          <span aria-hidden="true" className="flex flex-1 items-center gap-2.5 truncate">
+            <CheckIcon />
+            <span className="flex-1 truncate text-sm font-medium">{justDone.title} — done</span>
+          </span>
           <button
             type="button"
             onClick={undo}
+            aria-label={`Undo ${justDone.title}`}
             className="min-h-10 shrink-0 rounded-xl bg-toast-btn px-4 text-sm font-semibold text-toast-ink"
           >
             Undo
