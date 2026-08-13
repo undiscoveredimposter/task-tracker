@@ -1,0 +1,95 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+# A newer push makes the run already in flight irrelevant.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    name: checks
+    runs-on: ubuntu-latest
+
+    services:
+      # The integration suites talk to a real database on purpose — the
+      # behaviour they cover (the unique constraint behind idempotent ticking,
+      # the FOR UPDATE that serialises invite accepts) is SQL behaviour a mock
+      # would only ever confirm we already believe. Mirrors
+      # server/docker-compose.test.yml so a run here matches `npm run test:db`.
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: tally
+          POSTGRES_PASSWORD: tally
+          POSTGRES_DB: tally_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U tally -d tally_test"
+          --health-interval=1s
+          --health-timeout=3s
+          --health-retries=30
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          # Matches the `engines.node` floor in package.json.
+          node-version: 22
+          cache: npm
+
+      # `ci` rather than `install`: a run starts from nothing and wants the
+      # lockfile reproduced exactly. That is the opposite of the tradeoff
+      # .claude/hooks/session-start.sh makes, where a cached container image
+      # means preserving node_modules is the whole point.
+      - run: npm ci
+
+      # Builds @tally/shared first, which is also what makes the server and web
+      # typechecks resolve it — both reach it through shared/dist.
+      - name: Typecheck
+        run: npm run typecheck
+
+      # Both workspaces — server under node --test, web under vitest. Without
+      # DATABASE_URL the integration suites skip themselves, so this is what
+      # separates a run that exercised the database layer from one that only
+      # said it was green.
+      - name: Test
+        env:
+          DATABASE_URL: postgresql://tally:tally@localhost:5432/tally_test
+        run: |
+          set -o pipefail
+          npm test 2>&1 | tee "$RUNNER_TEMP/test-output.txt"
+
+      # A suite that skips itself still exits 0, so a DATABASE_URL that stopped
+      # reaching the service above would quietly go back to reporting green
+      # without having touched Postgres. That failure is invisible by
+      # construction — it has to be asserted against.
+      - name: Fail if any suite skipped itself
+        run: |
+          if grep -q "# SKIP" "$RUNNER_TEMP/test-output.txt"; then
+            echo "::error::Test suites skipped themselves — the database layer did not run."
+            grep "# SKIP" "$RUNNER_TEMP/test-output.txt"
+            exit 1
+          fi
+
+      - name: Build
+        run: npm run build
+
+      # The hook is what gets a Claude Code on the web session to the point
+      # where the three checks above run at all, and nothing else exercises it.
+      - name: Check the session-start hook
+        run: |
+          test -x .claude/hooks/session-start.sh || {
+            echo "session-start.sh is not executable; the hook will not run"
+            exit 1
+          }
+          shellcheck .claude/hooks/session-start.sh
