@@ -86,6 +86,11 @@ export interface Harness {
 export interface HarnessOptions {
   /** Set false to start on an empty schema — the migration tests need that. */
   migrate?: boolean;
+  /**
+   * Environment applied after the defaults below and before the server modules
+   * load. For settings read once at import — rate limits, invite lifetimes.
+   */
+  env?: Record<string, string>;
 }
 
 /** Copy of DATABASE_URL with `search_path` pinned to one throwaway schema. */
@@ -140,6 +145,14 @@ export async function startHarness(options: HarnessOptions = {}): Promise<Harnes
   process.env.INVITE_DEFAULT_DAYS = '7';
   // Static serving would otherwise swallow unknown paths behind an SPA fallback.
   process.env.WEB_ROOT = '';
+  // Every suite hammers the API from 127.0.0.1, which to a per-address limiter
+  // is one extremely busy caller. Raised out of the way here so an unrelated
+  // test can never fail with a 429; rate-limit.integration.test.ts sets its own
+  // low values through `options.env` and is where the limits are actually tested.
+  process.env.RATE_LIMIT_INVITE_LOOKUPS_PER_MINUTE = '100000';
+  process.env.RATE_LIMIT_WRITES_PER_MINUTE = '100000';
+
+  for (const [key, value] of Object.entries(options.env ?? {})) process.env[key] = value;
 
   const { pool } = await import('../../src/db.ts');
   const { migrate } = await import('../../src/migrate.ts');
