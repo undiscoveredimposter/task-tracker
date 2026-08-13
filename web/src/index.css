@@ -1,0 +1,290 @@
+@import 'tailwindcss';
+
+/*
+ * Tally's design tokens, lifted from the mockup.
+ *
+ * Utilities point at the semantic names below via var(), so `bg-surface` means
+ * the same thing in both themes and the palette swaps in one place.
+ */
+@theme {
+  --color-ground: var(--t-ground);
+  --color-surface: var(--t-surface);
+  --color-ink: var(--t-ink);
+  --color-muted: var(--t-muted);
+  --color-accent: var(--t-accent);
+  --color-accent-ink: var(--t-accent-ink);
+  --color-divider: var(--t-divider);
+  --color-tint: var(--t-tint);
+  --color-tint2: var(--t-tint-2);
+  --color-tint3: var(--t-tint-3);
+  --color-track: var(--t-track);
+  --color-outline: var(--t-outline);
+  --color-check-ink: var(--t-check-ink);
+  --color-danger: var(--t-danger);
+  --color-toast: var(--t-toast-bg);
+  --color-toast-ink: var(--t-toast-ink);
+  --color-toast-btn: var(--t-toast-btn);
+
+  --font-sans:
+    -apple-system, system-ui, 'Segoe UI', Roboto, sans-serif;
+}
+
+/* Light is the base definition so no colour exists only inside a media query. */
+:root {
+  --t-ground: #f3f5fe;
+  --t-surface: #fdfdff;
+  --t-ink: #292b31;
+  --t-muted: rgba(41, 43, 49, 0.6);
+  --t-accent: #5d5294;
+  --t-accent-ink: #423a6a;
+  --t-divider: rgba(41, 43, 49, 0.14);
+  --t-tint: #e7e5fe;
+  --t-tint-2: #e4e7f5;
+  --t-tint-3: #d2cefd;
+  --t-track: #e4e7f5;
+  --t-outline: #b2b6ca;
+  --t-check-ink: #f5f4ff;
+  --t-danger: #9c4038;
+  --t-toast-bg: #292b31;
+  --t-toast-ink: #f3f5fe;
+  --t-toast-btn: #3f424d;
+  --t-elev: 0 1px 3px rgba(30, 32, 60, 0.1), 0 0 0 1px rgba(41, 43, 49, 0.05);
+  color-scheme: light;
+}
+
+/* The design is dark-first, so anyone on "system" at night gets the dark skin. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --t-ground: #161826;
+    --t-surface: #232532;
+    --t-ink: #e9e9ed;
+    --t-muted: rgba(233, 233, 237, 0.58);
+    --t-accent: #9184d9;
+    --t-accent-ink: #d2cefd;
+    --t-divider: rgba(233, 233, 237, 0.16);
+    --t-tint: #2b2741;
+    --t-tint-2: #292b31;
+    --t-tint-3: #423a6a;
+    --t-track: #2c2e3d;
+    --t-outline: #595d6c;
+    --t-check-ink: #161826;
+    --t-danger: #e09088;
+    --t-toast-bg: #e4e7f5;
+    --t-toast-ink: #292b31;
+    --t-toast-btn: #cfd3e5;
+    --t-elev: 0 0 0 1px rgba(233, 233, 237, 0.07);
+    color-scheme: dark;
+  }
+}
+
+:root[data-theme='dark'] {
+  --t-ground: #161826;
+  --t-surface: #232532;
+  --t-ink: #e9e9ed;
+  --t-muted: rgba(233, 233, 237, 0.58);
+  --t-accent: #9184d9;
+  --t-accent-ink: #d2cefd;
+  --t-divider: rgba(233, 233, 237, 0.16);
+  --t-tint: #2b2741;
+  --t-tint-2: #292b31;
+  --t-tint-3: #423a6a;
+  --t-track: #2c2e3d;
+  --t-outline: #595d6c;
+  --t-check-ink: #161826;
+  --t-danger: #e09088;
+  --t-toast-bg: #e4e7f5;
+  --t-toast-ink: #292b31;
+  --t-toast-btn: #cfd3e5;
+  --t-elev: 0 0 0 1px rgba(233, 233, 237, 0.07);
+  color-scheme: dark;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  background: var(--t-ground);
+  color: var(--t-ink);
+  font-family: var(--font-sans);
+  /* Stops the whole page rubber-banding when a list is scrolled to its end,
+     which in a standalone PWA looks like the app has come loose. */
+  overscroll-behavior-y: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+@layer components {
+  .card {
+    background: var(--t-surface);
+    box-shadow: var(--t-elev);
+  }
+
+  /* Buttons and rows are never smaller than a fingertip. */
+  .tap {
+    min-height: 44px;
+  }
+
+  .btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    min-height: 52px;
+    border-radius: 14px;
+    font-size: 16px;
+    font-weight: 600;
+    font-family: inherit;
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+
+  .btn-primary {
+    border: 1.5px solid var(--t-accent);
+    background: transparent;
+    color: var(--t-accent-ink);
+  }
+
+  .btn-primary:hover:not(:disabled) {
+    background: var(--t-tint);
+  }
+
+  .btn-plain {
+    border: 1px solid var(--t-divider);
+    background: var(--t-surface);
+    color: var(--t-ink);
+    font-weight: 500;
+  }
+
+  .btn:disabled {
+    opacity: 0.55;
+    cursor: default;
+  }
+
+  .field {
+    min-height: 52px;
+    border-radius: 14px;
+    border: 1px solid var(--t-divider);
+    background: var(--t-surface);
+    color: var(--t-ink);
+    /* 16px keeps iOS Safari from zooming the viewport on focus. */
+    font-size: 16px;
+    padding: 0 16px;
+    font-family: inherit;
+    width: 100%;
+  }
+
+  .field:focus-visible {
+    outline: 2px solid var(--t-accent);
+    outline-offset: 1px;
+  }
+
+  /* Bottom action bars sit above the home indicator on iOS. */
+  .safe-bottom {
+    padding-bottom: calc(env(safe-area-inset-bottom) + 12px);
+  }
+
+  .safe-top {
+    padding-top: env(safe-area-inset-top);
+  }
+}
+
+:where(button, a, input, textarea, [tabindex]):focus-visible {
+  outline: 2px solid var(--t-accent);
+  outline-offset: 2px;
+}
+
+/* ── Motion ──────────────────────────────────────────────────────────────── */
+
+@keyframes pop {
+  0% {
+    transform: scale(0.7);
+  }
+  60% {
+    transform: scale(1.12);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+@keyframes checkdraw {
+  from {
+    stroke-dashoffset: 24;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes fadein {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes toastup {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes sheetup {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+
+@keyframes shimmer {
+  0%,
+  100% {
+    opacity: 0.55;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+.anim-pop {
+  animation: pop 0.42s cubic-bezier(0.34, 1.6, 0.64, 1);
+}
+.anim-check path {
+  stroke-dasharray: 24;
+  animation: checkdraw 0.32s ease-out 0.06s both;
+}
+.anim-fadein {
+  animation: fadein 0.2s ease-out;
+}
+.anim-toast {
+  animation: toastup 0.2s ease-out;
+}
+.anim-sheet {
+  animation: sheetup 0.22s ease-out;
+}
+.anim-shimmer {
+  animation: shimmer 1.4s ease-in-out infinite;
+}
+
+/* Respect a stated preference for less movement — the check draw and the row
+   pop are decoration, not information. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
