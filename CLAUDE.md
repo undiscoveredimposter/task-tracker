@@ -48,3 +48,7 @@ web client safely replay ticks queued while offline. Don't weaken either.
 `.claude/hooks/session-start.sh` installs dependencies and builds `shared/` when a Claude
 Code on the web session starts, so the checks above work immediately. It is a no-op on local
 checkouts.
+
+`.github/workflows/ci.yml` runs the same three checks on every pull request and on pushes to
+`main`. Run them locally before handing work off anyway — a red pull request costs a review
+round.

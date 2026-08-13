@@ -1,0 +1,56 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+# A newer push makes the run already in flight irrelevant.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    name: checks
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          # Matches the `engines.node` floor in package.json.
+          node-version: 22
+          cache: npm
+
+      # `ci` rather than `install`: a run starts from nothing and wants the
+      # lockfile reproduced exactly. That is the opposite of the tradeoff
+      # .claude/hooks/session-start.sh makes, where a cached container image
+      # means preserving node_modules is the whole point.
+      - run: npm ci
+
+      # Builds @tally/shared first, which is also what makes the server and web
+      # typechecks resolve it — both reach it through shared/dist.
+      - name: Typecheck
+        run: npm run typecheck
+
+      # Both workspaces: 48 server tests under node --test, 44 web under vitest.
+      - name: Test
+        run: npm test
+
+      - name: Build
+        run: npm run build
+
+      # The hook is what gets a Claude Code on the web session to the point
+      # where the three checks above run at all, and nothing else exercises it.
+      - name: Check the session-start hook
+        run: |
+          test -x .claude/hooks/session-start.sh || {
+            echo "session-start.sh is not executable; the hook will not run"
+            exit 1
+          }
+          shellcheck .claude/hooks/session-start.sh
