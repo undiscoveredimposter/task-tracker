@@ -250,9 +250,11 @@ export function ListSkeleton() {
 }
 
 /** Fixed bar at the bottom of a screen, clear of the home indicator. */
-export function BottomBar({ children }: { children: ReactNode }) {
+export function BottomBar({ children, className = '' }: { children: ReactNode; className?: string }) {
   return (
-    <div className="safe-bottom pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-ground from-55% to-transparent px-4 pt-3">
+    <div
+      className={`safe-bottom pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-ground from-55% to-transparent px-4 pt-3 ${className}`}
+    >
       <div className="pointer-events-auto">{children}</div>
     </div>
   );
