@@ -5,8 +5,10 @@ import {
   cadenceShort,
   initialOf,
   listSummaryLine,
+  offlineLabel,
   resetPreview,
   resetsInLabel,
+  savedAgoLabel,
   timeOfDay,
   whoDidIt,
 } from './format';
@@ -167,5 +169,64 @@ describe('resetPreview', () => {
     expect(resetPreview(0)).toBe(
       'Resets at midnight — the list starts fresh exactly when the date changes.',
     );
+  });
+});
+
+describe('savedAgoLabel', () => {
+  const ago = (ms: number) => savedAgoLabel(now.getTime() - ms, now);
+
+  it('stays vague for the last minute, where a number would be noise', () => {
+    expect(ago(0)).toBe('a moment ago');
+    expect(ago(30_000)).toBe('a moment ago');
+  });
+
+  it('counts minutes, then hours, then days', () => {
+    expect(ago(60_000)).toBe('1 minute ago');
+    expect(ago(45 * 60_000)).toBe('45 minutes ago');
+    expect(ago(3_600_000)).toBe('1 hour ago');
+    expect(ago(5 * 3_600_000)).toBe('5 hours ago');
+    expect(ago(26 * 3_600_000)).toBe('1 day ago');
+    expect(ago(4 * 86_400_000)).toBe('4 days ago');
+  });
+
+  it('does not read the future when the device clock has drifted', () => {
+    expect(ago(-90_000)).toBe('a moment ago');
+  });
+});
+
+describe('offlineLabel', () => {
+  const savedAt = now.getTime() - 3 * 3_600_000;
+
+  it('says nothing at all when everything is current', () => {
+    expect(offlineLabel({ online: true, pending: 0, savedAt }, now)).toBe('');
+  });
+
+  it('says the list is remembered rather than current', () => {
+    expect(offlineLabel({ online: false, pending: 0, savedAt }, now)).toBe(
+      'Offline — showing what was here 3 hours ago',
+    );
+  });
+
+  it('counts what is still waiting alongside it', () => {
+    expect(offlineLabel({ online: false, pending: 2, savedAt }, now)).toBe(
+      'Offline — showing what was here 3 hours ago · 2 ticks waiting to sync',
+    );
+    expect(offlineLabel({ online: false, pending: 1, savedAt }, now)).toBe(
+      'Offline — showing what was here 3 hours ago · 1 tick waiting to sync',
+    );
+  });
+
+  it('falls back to the plain wording when nothing has been saved yet', () => {
+    expect(offlineLabel({ online: false, pending: 0, savedAt: null }, now)).toBe(
+      'Offline — you can still tick things off',
+    );
+    expect(offlineLabel({ online: false, pending: 3, savedAt: null }, now)).toBe(
+      'Offline — 3 ticks waiting to sync',
+    );
+  });
+
+  it('stops claiming to be offline once the queue is draining', () => {
+    expect(offlineLabel({ online: true, pending: 2, savedAt }, now)).toBe('Syncing 2 ticks…');
+    expect(offlineLabel({ online: true, pending: 1, savedAt }, now)).toBe('Syncing 1 tick…');
   });
 });

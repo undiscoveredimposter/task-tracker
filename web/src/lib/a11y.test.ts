@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Task } from '@tally/shared';
-import { holdFocus, syncMessage, taskRowLabel, undoAnnouncement } from './a11y';
+import { holdFocus, taskRowLabel, undoAnnouncement } from './a11y';
 
 const SAM = { id: 'u-sam', displayName: 'Sam', email: null, photoUrl: null };
 const ZONE = 'Europe/London';
@@ -75,26 +75,8 @@ describe('undoAnnouncement', () => {
   });
 });
 
-describe('syncMessage', () => {
-  it('says nothing at all when there is nothing to say', () => {
-    expect(syncMessage(true, 0)).toBeNull();
-  });
-
-  it('reassures that ticking still works with no signal', () => {
-    expect(syncMessage(false, 0)).toBe('Offline — you can still tick things off');
-  });
-
-  it('counts what is queued while offline', () => {
-    expect(syncMessage(false, 1)).toBe('Offline — 1 tick waiting to sync');
-    expect(syncMessage(false, 3)).toBe('Offline — 3 ticks waiting to sync');
-  });
-
-  it('stops claiming to be offline once the signal is back', () => {
-    // The banner outlives the outage by however long the outbox takes to drain.
-    expect(syncMessage(true, 2)).toBe('2 ticks still to sync');
-    expect(syncMessage(true, 1)).toBe('1 tick still to sync');
-  });
-});
+/* What the network is doing is announced from `offlineLabel` in format.ts, and
+   covered by its tests there — the banner speaks and shows the same sentence. */
 
 describe('holdFocus', () => {
   const target = (isConnected = true) => {

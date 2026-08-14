@@ -47,19 +47,10 @@ export function undoAnnouncement(title: string, seconds: number): string {
   return `${title} done. Undo available for ${seconds} second${seconds === 1 ? '' : 's'}.`;
 }
 
-/**
- * The offline banner and the queued-tick count, in words. Null when there is
- * nothing worth saying, which is nearly always.
- *
- * The queue outlives the outage — it drains on the way back — so being online
- * with work still pending is a real state and gets its own sentence rather than
- * carrying on claiming to be offline.
- */
-export function syncMessage(online: boolean, pending: number): string | null {
-  const ticks = `${pending} tick${pending === 1 ? '' : 's'}`;
-  if (!online) return pending > 0 ? `Offline — ${ticks} waiting to sync` : 'Offline — you can still tick things off';
-  return pending > 0 ? `${ticks} still to sync` : null;
-}
+/* The network state is announced too, but its wording is `offlineLabel` in
+   format.ts — the banner shows the same sentence, and a second implementation
+   here drifted from it the moment the offline cache started saying how old the
+   copy was. One state, one sentence, said once. */
 
 /* ── Where focus goes ────────────────────────────────────────────────────── */
 

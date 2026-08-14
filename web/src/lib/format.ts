@@ -31,6 +31,47 @@ export function resetsInLabel(resetsAt: string | null, now: Date = new Date()): 
 }
 
 /**
+ * How old the remembered copy of a list is. Coarse like the countdown above:
+ * the point is that it isn't current, not the exact minute it was saved.
+ */
+export function savedAgoLabel(savedAt: number, now: Date = new Date()): string {
+  const elapsed = now.getTime() - savedAt;
+  // A clock that has drifted forward would otherwise read as a copy from the future.
+  if (!Number.isFinite(elapsed) || elapsed < 60_000) return 'a moment ago';
+
+  const minutes = Math.floor(elapsed / 60_000);
+  if (minutes < 60) return `${minutes} minute${minutes === 1 ? '' : 's'} ago`;
+
+  const hours = Math.floor(elapsed / 3_600_000);
+  if (hours < 24) return `${hours} hour${hours === 1 ? '' : 's'} ago`;
+
+  const days = Math.floor(elapsed / 86_400_000);
+  return `${days} day${days === 1 ? '' : 's'} ago`;
+}
+
+/**
+ * The single line the offline banner shows. Empty when there is nothing worth
+ * saying, which is what decides whether the banner appears at all.
+ */
+export function offlineLabel(
+  state: { online: boolean; pending: number; savedAt: number | null },
+  now: Date = new Date(),
+): string {
+  const { online, pending, savedAt } = state;
+  const ticks = `${pending} tick${pending === 1 ? '' : 's'}`;
+
+  if (online) return pending > 0 ? `Syncing ${ticks}…` : '';
+
+  const waiting = pending > 0 ? `${ticks} waiting to sync` : null;
+  if (savedAt === null) return `Offline — ${waiting ?? 'you can still tick things off'}`;
+
+  // Say plainly that this is remembered, so nobody trusts a count that stopped
+  // being true when the signal did.
+  const remembered = `showing what was here ${savedAgoLabel(savedAt, now)}`;
+  return `Offline — ${waiting ? `${remembered} · ${waiting}` : remembered}`;
+}
+
+/**
  * The time a task was ticked, shown in the *list's* timezone rather than the
  * reader's. Everyone sharing a list then sees the same thing, and a tick that
  * counted for yesterday doesn't display as today.

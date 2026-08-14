@@ -2,7 +2,7 @@ import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import type { UserRef } from '@tally/shared';
 import { holdFocus } from '../lib/a11y';
-import { initialOf } from '../lib/format';
+import { initialOf, offlineLabel } from '../lib/format';
 
 /* ── Icons ───────────────────────────────────────────────────────────────── */
 
@@ -37,12 +37,19 @@ export const CloseIcon = ({ size = 20 }: { size?: number }) => (
   </svg>
 );
 
-export const OfflineIcon = ({ size = 16 }: { size?: number }) => (
-  <svg width={size} height={size} viewBox="0 0 24 24" {...stroke} strokeWidth={2}>
+export const OfflineIcon = ({ size = 16, className = '' }: { size?: number; className?: string }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" {...stroke} strokeWidth={2} className={className}>
     <path d="M3 3l18 18" />
     <path d="M5 10a12 12 0 0 1 5.4-3M12.5 6.6A12 12 0 0 1 21 10" opacity={0.7} />
     <path d="M8 13.5a7 7 0 0 1 2.5-1.5M13.7 12.3a7 7 0 0 1 2.8 1.7" opacity={0.7} />
     <circle cx="12" cy="17.5" r="1.4" fill="currentColor" stroke="none" />
+  </svg>
+);
+
+export const UpdateIcon = ({ size = 18 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" {...stroke} strokeWidth={2} className="shrink-0">
+    <path d="M20 12a8 8 0 1 1-2.4-5.7" />
+    <path d="M20.5 3.8V8h-4.2" />
   </svg>
 );
 
@@ -254,6 +261,54 @@ export function Sheet({
         {children}
       </div>
     </dialog>
+  );
+}
+
+/**
+ * Says what the network is doing and, when the data is a remembered copy, how
+ * old it is. Shows nothing when there is nothing worth saying.
+ *
+ * The spoken and the seen halves are one sentence from one place. Two wordings
+ * of the same state drift, and the drift is invisible — you have to be using a
+ * reader to notice you were told the list is current while the screen says it
+ * is three hours old.
+ *
+ * The live region is always mounted and empty rather than mounted alongside the
+ * banner: assistive tech announces changes to regions it was already watching,
+ * so one that arrives with its text already in it may say nothing at all. The
+ * visible half is hidden from the accessible tree so the sentence isn't read
+ * out twice.
+ */
+export function OfflineBanner({
+  online,
+  pending,
+  savedAt,
+}: {
+  online: boolean;
+  pending: number;
+  savedAt: number | null;
+}) {
+  const label = offlineLabel({ online, pending, savedAt });
+
+  return (
+    <>
+      <p role="status" className="sr-only">
+        {label}
+      </p>
+
+      {label && (
+        <div
+          aria-hidden="true"
+          className="anim-fadein mx-4 mb-2.5 flex shrink-0 items-center gap-2.5 rounded-xl bg-tint px-3.5 py-2.5 text-[13px] font-medium text-accent-ink"
+        >
+          {/* Only when there is genuinely no signal — the same banner carries
+              "Syncing 2 ticks…" on the way back, and a crossed-out signal next
+              to that says the opposite of the words beside it. */}
+          {!online && <OfflineIcon className="shrink-0" />}
+          {label}
+        </div>
+      )}
+    </>
   );
 }
 

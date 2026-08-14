@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { roleAtLeast, type Task } from '@tally/shared';
 import { api } from '../lib/api';
-import { syncMessage, undoAnnouncement } from '../lib/a11y';
+import { undoAnnouncement } from '../lib/a11y';
 import { useAuth } from '../lib/auth';
 import { useData } from '../lib/store';
 import { resetsInLabel } from '../lib/format';
@@ -13,7 +13,7 @@ import {
   CheckIcon,
   EmptyState,
   ListSkeleton,
-  OfflineIcon,
+  OfflineBanner,
   PlusIcon,
   ProgressBar,
   Sheet,
@@ -27,7 +27,7 @@ export function ListDetail() {
   const { id = '' } = useParams();
   const navigate = useNavigate();
   const { me } = useAuth();
-  const { getList, loadList, setList, toggleTask, online, pending } = useData();
+  const { getList, loadList, setList, toggleTask, online, pending, savedAt } = useData();
 
   const list = getList(id);
   const [justDone, setJustDone] = useState<Task | null>(null);
@@ -48,8 +48,11 @@ export function ListDetail() {
         <Link to="/" aria-label="Back" className="-ml-3 flex size-11 items-center justify-center text-accent-ink">
           <BackIcon />
         </Link>
-        <EmptyState title="That list isn't here">
-          It may have been deleted, or you may no longer be a member.
+        {/* Offline, "isn't here" only means this device never saved a copy of it. */}
+        <EmptyState title={online ? "That list isn't here" : 'Not saved on this device'}>
+          {online
+            ? 'It may have been deleted, or you may no longer be a member.'
+            : "You're offline, and this list hasn't been opened on this device yet. It'll be here once you're back."}
         </EmptyState>
       </div>
     ) : (
@@ -59,7 +62,6 @@ export function ListDetail() {
 
   const canEdit = roleAtLeast(list.role, 'editor');
   const isOwner = list.role === 'owner';
-  const sync = syncMessage(online, pending);
 
   const onToggle = (task: Task) => {
     toggleTask(list.id, task);
@@ -161,24 +163,8 @@ export function ListDetail() {
         </div>
       </div>
 
-      {/* A live region has to already be in the page when its text changes, or
-          there was nothing there for assistive tech to be watching. Both of the
-          ones on this screen therefore render always and sit empty until there
-          is something to say, and the visible copies are hidden from the
-          accessible tree so nothing is read out twice. */}
-      <p role="status" className="sr-only">
-        {sync ?? ''}
-      </p>
-
-      {sync && (
-        <div
-          aria-hidden="true"
-          className="anim-fadein mx-4 mb-2.5 flex shrink-0 items-center gap-2.5 rounded-xl bg-tint px-3.5 py-2.5 text-[13px] font-medium text-accent-ink"
-        >
-          {!online && <OfflineIcon />}
-          {sync}
-        </div>
-      )}
+      {/* Carries its own live region, so the lists home is announced too. */}
+      <OfflineBanner online={online} pending={pending} savedAt={savedAt} />
 
       {list.tasks.length === 0 ? (
         <EmptyState
@@ -208,8 +194,10 @@ export function ListDetail() {
         </div>
       )}
 
-      {/* The toast leaves on a timer nobody watching it can see, so the spoken
-          version says how long the undo will be there. */}
+      {/* Mounted always and empty until there is something to say, for the
+          reason spelled out on OfflineBanner. The toast leaves on a timer
+          nobody watching it can see, so the spoken version says how long the
+          undo will be there. */}
       <p role="status" className="sr-only">
         {justDone ? undoAnnouncement(justDone.title, UNDO_SECONDS) : ''}
       </p>

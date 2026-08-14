@@ -11,6 +11,19 @@ function optional(name: string, fallback: string): string {
   return value === undefined || value === '' ? fallback : value;
 }
 
+/**
+ * A count that must be above zero. A rate limit of 0 would lock everyone out of
+ * their own list, so a typo in the environment fails at boot rather than turning
+ * the app into a wall of 429s that nobody can explain.
+ */
+function positive(name: string, fallback: string): number {
+  const value = Number(optional(name, fallback));
+  if (!Number.isFinite(value) || value <= 0) {
+    throw new Error(`${name} must be a positive number, got ${JSON.stringify(process.env[name])}`);
+  }
+  return value;
+}
+
 export const config = {
   port: Number(optional('PORT', '8080')),
   databaseUrl: required('DATABASE_URL'),
@@ -27,6 +40,22 @@ export const config = {
   },
   /** Default lifetime of an invite link. 0 means links never expire. */
   inviteDefaultDays: Number(optional('INVITE_DEFAULT_DAYS', '7')),
+
+  /** Request budgets, per minute. See rate-limit.ts and limits.ts. */
+  rateLimit: {
+    /**
+     * Unauthenticated invite-link lookups, per client address. Opening a link
+     * costs two requests (preview, then accept), so twenty is a household
+     * passing one link round several times over and still not noticing.
+     */
+    inviteLookupsPerMinute: positive('RATE_LIMIT_INVITE_LOOKUPS_PER_MINUTE', '20'),
+    /**
+     * Authenticated writes, per signed-in person. Loose on purpose — this is a
+     * backstop against a runaway client, not a quota. Nobody ticks four things
+     * a second by hand.
+     */
+    writesPerMinute: positive('RATE_LIMIT_WRITES_PER_MINUTE', '240'),
+  },
 };
 
 export const isProduction = config.nodeEnv === 'production';
