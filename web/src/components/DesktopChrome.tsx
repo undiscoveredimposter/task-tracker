@@ -49,7 +49,12 @@ export function DesktopSidebar() {
   const [creating, setCreating] = useState(false);
 
   return (
-    <nav aria-label="Your lists" className="hidden w-70 shrink-0 flex-col border-r border-divider md:flex">
+    <nav
+      aria-label="Your lists"
+      // Width comes from --sidebar-width so a sheet can offset itself by the
+      // same figure; see `.has-sidebar` in index.css.
+      className="hidden w-(--sidebar-width) shrink-0 flex-col border-r border-divider md:flex"
+    >
       <div className="min-h-0 flex-1 overflow-y-auto p-3">
         {listsLoading ? (
           <div className="flex flex-col gap-2">

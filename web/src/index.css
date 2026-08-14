@@ -27,6 +27,10 @@
 
   --font-sans:
     -apple-system, system-ui, 'Segoe UI', Roboto, sans-serif;
+
+  /* The cap on the task column — 680px, as `max-w-column`. A bottom sheet wears
+     it too, so the two can't drift apart: a sheet belongs to that column. */
+  --container-column: 42.5rem;
 }
 
 /* Light is the base definition so no colour exists only inside a media query. */
@@ -191,6 +195,20 @@ body {
 
   .safe-top {
     padding-top: env(safe-area-inset-top);
+  }
+
+  /* The desktop sidebar's width, published to everything below it. A sheet is
+     positioned against the window, so lining it up with the task column is only
+     possible if it knows how much of the window the sidebar has taken. Zero
+     below `md:` and on the screens that have no sidebar at all. */
+  .has-sidebar {
+    --sidebar-width: 0px;
+  }
+
+  @media (width >= 48rem) {
+    .has-sidebar {
+      --sidebar-width: --spacing(70);
+    }
   }
 }
 
