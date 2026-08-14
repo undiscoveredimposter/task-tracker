@@ -1,3 +1,18 @@
+# Tally CI — what stops a broken pull request from being merged.
+#
+# Two jobs run in parallel:
+#   verify  typecheck, both test suites, the production build, and the
+#           session-start hook that gets a web session to the point where those
+#           three checks can run at all
+#   docker  builds the deployable image and boots it against a real Postgres
+#
+# and a third, `ci`, gates on both so branch protection has a single required
+# check to point at.
+#
+# The integration suites need a real database. They skip themselves politely
+# when DATABASE_URL is unset, which in CI would be a silently green run, so the
+# `verify` job attaches a Postgres service and fails if anything skipped.
+
 name: CI
 
 on:
@@ -5,18 +20,21 @@ on:
   push:
     branches: [main]
 
-# A newer push makes the run already in flight irrelevant.
+# A newer push to the same branch makes the older run irrelevant.
 concurrency:
-  group: ci-${{ github.ref }}
+  group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 permissions:
   contents: read
 
 jobs:
-  checks:
-    name: checks
+  verify:
+    name: typecheck, tests, build
     runs-on: ubuntu-latest
+    # A backstop against a hung run holding a runner, not an expectation — see
+    # the runtime note in the pull request.
+    timeout-minutes: 15
 
     services:
       # The integration suites talk to a real database on purpose — the
@@ -24,6 +42,9 @@ jobs:
       # the FOR UPDATE that serialises invite accepts) is SQL behaviour a mock
       # would only ever confirm we already believe. Mirrors
       # server/docker-compose.test.yml so a run here matches `npm run test:db`.
+      #
+      # Not the deployment topology, either — production Postgres is a
+      # Coolify-managed database, never a compose service.
       postgres:
         image: postgres:16-alpine
         env:
@@ -33,10 +54,15 @@ jobs:
         ports:
           - 5432:5432
         options: >-
-          --health-cmd="pg_isready -U tally -d tally_test"
-          --health-interval=1s
-          --health-timeout=3s
-          --health-retries=30
+          --health-cmd "pg_isready -U tally -d tally_test"
+          --health-interval 1s
+          --health-timeout 3s
+          --health-retries 30
+
+    env:
+      # test/helpers/harness.ts gives each test file its own throwaway schema in
+      # this database, so the suites cannot tread on each other.
+      DATABASE_URL: postgresql://tally:tally@127.0.0.1:5432/tally_test
 
     steps:
       - uses: actions/checkout@v7
@@ -45,51 +71,226 @@ jobs:
         with:
           # Matches the `engines.node` floor in package.json.
           node-version: 22
+          # Keyed on package-lock.json: restores the npm download cache so a run
+          # is not mostly `npm ci`.
           cache: npm
 
       # `ci` rather than `install`: a run starts from nothing and wants the
       # lockfile reproduced exactly. That is the opposite of the tradeoff
       # .claude/hooks/session-start.sh makes, where a cached container image
       # means preserving node_modules is the whole point.
-      - run: npm ci
+      - name: Install
+        run: npm ci
 
       # Builds @tally/shared first, which is also what makes the server and web
       # typechecks resolve it — both reach it through shared/dist.
       - name: Typecheck
         run: npm run typecheck
 
-      # Both workspaces — server under node --test, web under vitest. Without
-      # DATABASE_URL the integration suites skip themselves, so this is what
-      # separates a run that exercised the database layer from one that only
-      # said it was green.
-      - name: Test
-        env:
-          DATABASE_URL: postgresql://tally:tally@localhost:5432/tally_test
+      - name: Server tests (unit + integration)
         run: |
           set -o pipefail
-          npm test 2>&1 | tee "$RUNNER_TEMP/test-output.txt"
+          npm test -w @tally/server 2>&1 | tee "$RUNNER_TEMP/server-tests.tap"
 
-      # A suite that skips itself still exits 0, so a DATABASE_URL that stopped
-      # reaching the service above would quietly go back to reporting green
-      # without having touched Postgres. That failure is invisible by
-      # construction — it has to be asserted against.
-      - name: Fail if any suite skipped itself
-        run: |
-          if grep -q "# SKIP" "$RUNNER_TEMP/test-output.txt"; then
-            echo "::error::Test suites skipped themselves — the database layer did not run."
-            grep "# SKIP" "$RUNNER_TEMP/test-output.txt"
+          # A suite that skips itself still exits 0 — node:test reports it as a
+          # passing `ok ... # SKIP` line — so a DATABASE_URL that stopped
+          # reaching the service above would quietly go back to reporting green
+          # without having touched Postgres. That failure is invisible by
+          # construction; it has to be asserted against.
+          if grep -q '# SKIP' "$RUNNER_TEMP/server-tests.tap"; then
+            echo "::error title=Integration suite skipped::A suite skipped itself, so this run proves less than it appears to. DATABASE_URL is set to '$DATABASE_URL' — check the postgres service container came up."
+            grep '# SKIP' "$RUNNER_TEMP/server-tests.tap"
             exit 1
           fi
+          echo "No suites skipped — the integration tests ran against Postgres."
+
+      - name: Web tests
+        run: npm test -w @tally/web
 
       - name: Build
         run: npm run build
 
       # The hook is what gets a Claude Code on the web session to the point
       # where the three checks above run at all, and nothing else exercises it.
+      # The executable bit in particular is the kind of thing that silently
+      # stops working.
       - name: Check the session-start hook
         run: |
           test -x .claude/hooks/session-start.sh || {
-            echo "session-start.sh is not executable; the hook will not run"
+            echo "::error title=session-start.sh is not executable::The hook will not run, so a web session starts without dependencies installed or shared/ built."
             exit 1
           }
           shellcheck .claude/hooks/session-start.sh
+
+  docker:
+    name: docker image
+    runs-on: ubuntu-latest
+    # Same backstop rationale as `verify`; the measured cost is far below this.
+    timeout-minutes: 20
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: tally
+          POSTGRES_PASSWORD: tally
+          POSTGRES_DB: tally_smoke
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U tally -d tally_smoke"
+          --health-interval 1s
+          --health-timeout 3s
+          --health-retries 30
+
+    env:
+      IMAGE: tally:ci-${{ github.sha }}
+      # Vite inlines VITE_* at build time. Building with recognisable rubbish and
+      # then looking for it in the bundle is what proves the build args are wired
+      # through — the deployment failure this repo is most likely to have.
+      CANARY_API_KEY: ci-canary-api-key
+      CANARY_AUTH_DOMAIN: ci-canary.example.invalid
+      CANARY_PROJECT_ID: ci-canary-project
+      CANARY_APP_ID: 1:0:web:cicanary
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Build the image
+        run: |
+          docker build \
+            --build-arg VITE_FIREBASE_API_KEY="$CANARY_API_KEY" \
+            --build-arg VITE_FIREBASE_AUTH_DOMAIN="$CANARY_AUTH_DOMAIN" \
+            --build-arg VITE_FIREBASE_PROJECT_ID="$CANARY_PROJECT_ID" \
+            --build-arg VITE_FIREBASE_APP_ID="$CANARY_APP_ID" \
+            -t "$IMAGE" .
+
+      - name: VITE_* build args reach the bundle
+        run: |
+          for value in "$CANARY_API_KEY" "$CANARY_AUTH_DOMAIN" "$CANARY_PROJECT_ID" "$CANARY_APP_ID"; do
+            if docker run --rm "$IMAGE" grep -rq -- "$value" /app/web/dist/assets; then
+              echo "ok: $value is inlined in the bundle"
+            else
+              echo "::error title=VITE_* not inlined::'$value' was passed as a build arg but is absent from web/dist. The frontend would ship with undefined Firebase config and nobody could sign in."
+              exit 1
+            fi
+          done
+
+      - name: Image is production and non-root
+        run: |
+          env_json=$(docker image inspect --format '{{json .Config.Env}}' "$IMAGE")
+          case "$env_json" in
+            *'"NODE_ENV=production"'*) echo "ok: NODE_ENV=production is baked into the image" ;;
+            *)
+              echo "::error title=NODE_ENV is not production::The development auth bypass in server/src/firebase.ts is gated on this. Image env: $env_json"
+              exit 1 ;;
+          esac
+
+          uid=$(docker run --rm "$IMAGE" id -u)
+          if [ "$uid" = "0" ]; then
+            echo "::error title=Container runs as root::The runtime stage should drop to the node user."
+            exit 1
+          fi
+          echo "ok: runs as uid $uid"
+
+      - name: Boot it against Postgres and check the healthcheck
+        run: |
+          # --network host so the container reaches the postgres service, which
+          # the runner publishes on localhost. Migrations run inside this process
+          # before the port opens, so a healthy port means they applied cleanly.
+          docker run -d --name tally-smoke --network host \
+            -e DATABASE_URL='postgresql://tally:tally@127.0.0.1:5432/tally_smoke' \
+            -e APP_ORIGIN='http://127.0.0.1:8080' \
+            "$IMAGE"
+
+          for _ in $(seq 1 30); do
+            code=$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8080/api/health || true)
+            [ "$code" = "200" ] && break
+            sleep 2
+          done
+
+          if [ "$code" != "200" ]; then
+            echo "::error title=Container never became healthy::GET /api/health returned '$code'. This is the endpoint Coolify polls."
+            exit 1
+          fi
+          echo "ok: /api/health returned 200"
+
+          # The same image has to serve the PWA, not just the API.
+          index=$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8080/ || true)
+          if [ "$index" != "200" ]; then
+            echo "::error title=PWA not served::GET / returned '$index'; the built frontend is missing from the image."
+            exit 1
+          fi
+          echo "ok: / served the built PWA"
+
+      - name: The dev auth bypass cannot be switched on
+        run: |
+          # NODE_ENV=production is baked in, so even an explicit TALLY_DEV_AUTH=1
+          # must not make the server accept a forged `dev:` token.
+          docker run -d --name tally-devauth --network host \
+            -e PORT=8099 \
+            -e TALLY_DEV_AUTH=1 \
+            -e DATABASE_URL='postgresql://tally:tally@127.0.0.1:5432/tally_smoke' \
+            "$IMAGE"
+
+          for _ in $(seq 1 30); do
+            code=$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8099/api/health || true)
+            [ "$code" = "200" ] && break
+            sleep 2
+          done
+          [ "$code" = "200" ] || { echo "::error::container with TALLY_DEV_AUTH=1 never came up"; exit 1; }
+
+          status=$(curl -s -o /dev/null -w '%{http_code}' \
+            -H 'Authorization: Bearer dev:ci-intruder:ci-intruder@example.test' \
+            http://127.0.0.1:8099/api/me)
+          if [ "$status" = "200" ]; then
+            echo "::error title=Development auth bypass is reachable in the image::A forged 'dev:' bearer token was accepted. This is an authentication bypass, not a warning."
+            exit 1
+          fi
+          echo "ok: forged dev token rejected with $status"
+
+      - name: Container logs
+        if: always()
+        run: |
+          docker logs tally-smoke 2>&1 | sed 's/^/[smoke] /' || true
+          docker logs tally-devauth 2>&1 | sed 's/^/[devauth] /' || true
+          docker rm -f tally-smoke tally-devauth >/dev/null 2>&1 || true
+
+  ci:
+    # One check for branch protection to require. Everything above must pass.
+    name: ci
+    runs-on: ubuntu-latest
+    needs: [verify, docker]
+    # `!cancelled()` rather than `always()`. With cancel-in-progress above, a
+    # superseded run has its jobs resolve to `cancelled`; an `always()` gate
+    # would then run, see a non-success need, and leave a red `ci` behind on a
+    # run nobody is waiting on. Skipping instead lets a cancellation read as a
+    # cancellation. Failures and skips still reach here, which is the case the
+    # gate exists for — a failed `verify` must not leave `ci` silently green.
+    if: ${{ !cancelled() }}
+    steps:
+      - name: Gate
+        env:
+          VERIFY: ${{ needs.verify.result }}
+          DOCKER: ${{ needs.docker.result }}
+        run: |
+          failed=0
+          for job in verify docker; do
+            case "$job" in
+              verify) result="$VERIFY" ;;
+              *) result="$DOCKER" ;;
+            esac
+            echo "$job: $result"
+            case "$result" in
+              success) ;;
+              cancelled)
+                # Reachable if a single job is cancelled without the whole run
+                # being cancelled. Still not a pass, but say what it was.
+                echo "::error title=$job was cancelled::Not a test failure — the job did not finish, so nothing was proven."
+                failed=1 ;;
+              *)
+                echo "::error title=$job did not pass::result was '$result'."
+                failed=1 ;;
+            esac
+          done
+          exit "$failed"
