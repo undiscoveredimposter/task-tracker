@@ -25,11 +25,16 @@ export function Lists() {
     <div className="relative flex h-full flex-col">
       <div className="safe-top flex shrink-0 items-center justify-between px-5 pt-2 pb-3.5">
         <h1 className="text-2xl font-semibold tracking-tight">Your lists</h1>
+        {/* The avatar is 36 and this signs you out, so the button carries the
+            44px target itself rather than inheriting the avatar's size. The
+            negative margin bleeds those 8px back out, leaving the header the
+            height it had and the avatar where it was. */}
         <button
           type="button"
           onClick={() => void signOut()}
           title={me?.email ?? undefined}
           aria-label="Account and sign out"
+          className="-m-1 flex size-11 items-center justify-center"
         >
           {me && <Avatar user={me} />}
         </button>
