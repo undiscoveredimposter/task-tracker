@@ -15,7 +15,7 @@ import {
   scheduleOf,
   type ListRow,
 } from '../lists.js';
-import { param } from '../http.js';
+import { uuidParam } from '../http.js';
 import { periodsBack } from '../periods.js';
 import { summariseStats } from '../stats.js';
 
@@ -102,13 +102,13 @@ listsRouter.post('/', async (req, res) => {
 });
 
 listsRouter.get('/:id', async (req, res) => {
-  const { list, role } = await requireListAccess(param(req, 'id'), authed(req).id);
+  const { list, role } = await requireListAccess(uuidParam(req, 'id', 'That list'), authed(req).id);
   res.json(await listDetail(list, role));
 });
 
 listsRouter.patch('/:id', async (req, res) => {
   const user = authed(req);
-  const { list } = await requireListAccess(param(req, 'id'), user.id, 'owner');
+  const { list } = await requireListAccess(uuidParam(req, 'id', 'That list'), user.id, 'owner');
   const body = updateListSchema.parse(req.body);
 
   // Restarting the anchor when the cadence becomes every_n_days makes the new
@@ -149,7 +149,7 @@ listsRouter.patch('/:id', async (req, res) => {
 
 listsRouter.delete('/:id', async (req, res) => {
   const user = authed(req);
-  const { list } = await requireListAccess(param(req, 'id'), user.id, 'owner');
+  const { list } = await requireListAccess(uuidParam(req, 'id', 'That list'), user.id, 'owner');
   await broadcast(list.id, { type: 'list.deleted', listId: list.id });
   await query('DELETE FROM lists WHERE id = $1', [list.id]);
   res.status(204).end();
@@ -164,7 +164,7 @@ const createTaskSchema = z.object({
 
 listsRouter.post('/:id/tasks', async (req, res) => {
   const user = authed(req);
-  const { list, role } = await requireListAccess(param(req, 'id'), user.id, 'editor');
+  const { list, role } = await requireListAccess(uuidParam(req, 'id', 'That list'), user.id, 'editor');
   const body = createTaskSchema.parse(req.body);
 
   const last = await queryOne<{ max: number | null }>(
@@ -189,7 +189,7 @@ listsRouter.post('/:id/tasks', async (req, res) => {
 const STREAK_LOOKBACK = 60;
 
 listsRouter.get('/:id/stats', async (req, res) => {
-  const { list } = await requireListAccess(param(req, 'id'), authed(req).id);
+  const { list } = await requireListAccess(uuidParam(req, 'id', 'That list'), authed(req).id);
   const window = Math.min(90, Math.max(1, Number(req.query.window ?? 7) || 7));
 
   const schedule = scheduleOf(list);
