@@ -109,7 +109,7 @@ export function ListSettings() {
                 onClick={() => set({ emoji: option })}
                 aria-pressed={value.emoji === option}
                 className={`size-12 rounded-2xl text-[22px] ${
-                  value.emoji === option ? 'border-[1.5px] border-accent bg-tint' : 'border border-divider bg-surface'
+                  value.emoji === option ? 'border-[1.5px] border-accent bg-tint' : 'border border-control bg-surface'
                 }`}
               >
                 {option}
@@ -172,7 +172,7 @@ export function ListSettings() {
                 className={`tap rounded-xl px-4 text-sm ${
                   value.cadence === cadence
                     ? 'border-[1.5px] border-accent bg-tint font-semibold text-accent-ink'
-                    : 'border border-divider bg-surface font-medium'
+                    : 'border border-control bg-surface font-medium'
                 }`}
               >
                 {label}
@@ -186,7 +186,7 @@ export function ListSettings() {
                 type="button"
                 aria-label="Fewer days"
                 onClick={() => set({ cadenceIntervalDays: Math.max(2, (value.cadenceIntervalDays ?? 3) - 1) })}
-                className="size-11 rounded-xl border border-divider bg-surface text-xl"
+                className="size-11 rounded-xl border border-control bg-surface text-xl"
               >
                 −
               </button>
@@ -195,7 +195,7 @@ export function ListSettings() {
                 type="button"
                 aria-label="More days"
                 onClick={() => set({ cadenceIntervalDays: Math.min(365, (value.cadenceIntervalDays ?? 3) + 1) })}
-                className="size-11 rounded-xl border border-divider bg-surface text-xl"
+                className="size-11 rounded-xl border border-control bg-surface text-xl"
               >
                 +
               </button>
@@ -213,7 +213,7 @@ export function ListSettings() {
                   className={`tap rounded-xl px-3 text-[13px] ${
                     value.weekStart === index + 1
                       ? 'border-[1.5px] border-accent bg-tint font-semibold text-accent-ink'
-                      : 'border border-divider bg-surface'
+                      : 'border border-control bg-surface'
                   }`}
                 >
                   {day.slice(0, 3)}
@@ -231,7 +231,7 @@ export function ListSettings() {
                 type="button"
                 aria-label="Earlier"
                 onClick={() => set({ resetHour: ((value.resetHour ?? 4) + 23) % 24 })}
-                className="size-11 rounded-xl border border-divider bg-surface text-xl"
+                className="size-11 rounded-xl border border-control bg-surface text-xl"
               >
                 −
               </button>
@@ -242,7 +242,7 @@ export function ListSettings() {
                 type="button"
                 aria-label="Later"
                 onClick={() => set({ resetHour: ((value.resetHour ?? 4) + 1) % 24 })}
-                className="size-11 rounded-xl border border-divider bg-surface text-xl"
+                className="size-11 rounded-xl border border-control bg-surface text-xl"
               >
                 +
               </button>

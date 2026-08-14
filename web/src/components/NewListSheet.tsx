@@ -65,7 +65,7 @@ export function NewListSheet({ onClose }: { onClose: () => void }) {
               onClick={() => setEmoji(option)}
               aria-pressed={emoji === option}
               className={`size-12 rounded-2xl text-[22px] ${
-                emoji === option ? 'border-[1.5px] border-accent bg-tint' : 'border border-divider bg-surface'
+                emoji === option ? 'border-[1.5px] border-accent bg-tint' : 'border border-control bg-surface'
               }`}
             >
               {option}

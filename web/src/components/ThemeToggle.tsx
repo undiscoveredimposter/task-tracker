@@ -38,7 +38,7 @@ export function ThemeToggle({ className = '' }: { className?: string }) {
             className={`tap flex-1 rounded-xl text-sm ${
               choice === value
                 ? 'border-[1.5px] border-accent bg-tint font-semibold text-accent-ink'
-                : 'border border-divider bg-surface font-medium'
+                : 'border border-control bg-surface font-medium'
             }`}
           >
             {label}

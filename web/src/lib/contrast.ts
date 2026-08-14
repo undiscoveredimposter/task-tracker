@@ -43,6 +43,20 @@ function flatten(fg: Rgba, bg: Rgba): Rgba {
   ];
 }
 
+/**
+ * The opaque colour a translucent one becomes once it is painted.
+ *
+ * Needed because a border is not always laid over what is behind its element:
+ * `background-clip` is `border-box`, so a translucent border paints over the
+ * element's own fill and it is *that* colour, not the token, which then has to
+ * clear 3:1 against the page. Channels are rounded because the screen has only
+ * 8 bits to give them.
+ */
+export function over(foreground: string, background: string): string {
+  const [r, g, b] = flatten(parseColor(foreground), parseColor(background));
+  return `rgb(${Math.round(r)}, ${Math.round(g)}, ${Math.round(b)})`;
+}
+
 /** WCAG 2.x relative luminance. */
 function luminance([r, g, b]: Rgba): number {
   const channel = (value: number) => {
