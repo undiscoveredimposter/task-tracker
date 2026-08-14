@@ -1,6 +1,6 @@
 // Must come first: it registers the module-resolution hooks that let the
 // dynamic imports below reach `src/*.ts` and `@tally/shared`.
-import './ts-resolve.ts';
+import '../../scripts/ts-resolve.ts';
 
 import { randomBytes } from 'node:crypto';
 import { once } from 'node:events';
