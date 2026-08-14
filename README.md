@@ -129,8 +129,18 @@ npm run dev -w @tally/web
 ```
 
 Vite serves the app on <http://localhost:5173> and proxies `/api` to
-`http://localhost:8080` (override with `API_ORIGIN`), so the browser sees one
-origin exactly as it does in production.
+`http://localhost:8080`, so the browser sees one origin exactly as it does in
+production.
+
+To point the proxy somewhere else, **export** `API_ORIGIN` in the shell you
+start Vite from:
+
+```bash
+API_ORIGIN=http://localhost:9000 npm run dev -w @tally/web
+```
+
+Putting it in `.env` or `web/.env.local` has no effect — `vite.config.ts` reads
+`process.env`, and neither file reaches it.
 
 ### Working without a Firebase project
 

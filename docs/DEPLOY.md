@@ -164,6 +164,19 @@ not.
 | `FIREBASE_CLIENT_EMAIL` | from the service account JSON | |
 | `FIREBASE_PRIVATE_KEY` | from the service account JSON | **secret**; see below |
 | `INVITE_DEFAULT_DAYS` | `7` | optional; `0` means links never expire |
+| `RATE_LIMIT_INVITE_LOOKUPS_PER_MINUTE` | `20` | optional; unauthenticated invite-link lookups, per client address |
+| `RATE_LIMIT_WRITES_PER_MINUTE` | `240` | optional; authenticated writes, per signed-in person |
+
+Both rate limits must be **above zero**. The server refuses to start on a `0` or
+a typo rather than booting into a wall of 429s nobody can explain, so a bad
+value shows up as a failed deploy, not a mysteriously broken app. The counters
+live in the process's memory, which is another reason to
+[run one instance](#run-one-instance). `GET /api/health` is never limited — a
+429 there would read as a sick container and take the app out of rotation.
+
+The defaults suit a household and most deployments never touch them. Raise
+`RATE_LIMIT_INVITE_LOOKUPS_PER_MINUTE` if several people share one outbound
+address (an office NAT) and hit "Too many invite links tried from here".
 
 `NODE_ENV=production`, `PORT=8080` and `WEB_ROOT` are baked into the image and
 set again in the compose file. Leave them alone —
@@ -308,6 +321,8 @@ genuinely want links that never expire.
 | `Failed to parse private key` / auth fails for every user | `FIREBASE_PRIVATE_KEY` truncated or missing its BEGIN/END lines |
 | Invite links point at the wrong host | `APP_ORIGIN` wrong or unset; it defaults to `http://localhost:5173` |
 | Ticks only appear after a refresh | SSE is being buffered by a proxy in front of Coolify, or more than one replica is running |
+| `429` with `{"code":"rate_limited"}` and a `Retry-After` header | A rate limit is doing its job. On invite links, several people behind one outbound address — raise `RATE_LIMIT_INVITE_LOOKUPS_PER_MINUTE`. On writes, it is per signed-in person, so it usually means a client retry loop rather than a real user |
+| Container will not start; `RATE_LIMIT_… must be a positive number` | One of the two limits is `0` or not a number. Set it above zero or remove it to take the default |
 | Deploy log shows the "no Firebase config" warning banner | The build had no `VITE_*` values. That image can never sign anyone in |
 
 ---
