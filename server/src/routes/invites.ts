@@ -8,7 +8,7 @@ import { query, queryOne, transaction } from '../db.js';
 import { broadcast } from '../events.js';
 import { HttpError, notFound } from '../errors.js';
 import { requireListAccess } from '../lists.js';
-import { param } from '../http.js';
+import { param, uuidParam } from '../http.js';
 import { inviteStatusOf } from '../invite-policy.js';
 import { inviteLookupLimiter, writeLimiter } from '../limits.js';
 
@@ -74,7 +74,7 @@ listInviteRouter.use(requireAuth, writeLimiter);
 
 listInviteRouter.get('/', async (req, res) => {
   const user = authed(req);
-  const { list } = await requireListAccess(param(req, 'id'), user.id, 'owner');
+  const { list } = await requireListAccess(uuidParam(req, 'id', 'That list'), user.id, 'owner');
 
   const rows = await query<InviteRow>(
     `SELECT * FROM invites
@@ -89,7 +89,7 @@ listInviteRouter.get('/', async (req, res) => {
 listInviteRouter.post('/', async (req, res) => {
   const user = authed(req);
   // Sharing stays with the owner — editors can change tasks, not membership.
-  const { list } = await requireListAccess(param(req, 'id'), user.id, 'owner');
+  const { list } = await requireListAccess(uuidParam(req, 'id', 'That list'), user.id, 'owner');
   const body = createInviteSchema.parse(req.body);
 
   const days = body.expiresInDays === undefined ? config.inviteDefaultDays : body.expiresInDays;
@@ -112,7 +112,9 @@ listInviteRouter.post('/', async (req, res) => {
 
 inviteRouter.delete('/:id', requireAuth, writeLimiter, async (req, res) => {
   const user = authed(req);
-  const row = await queryOne<InviteRow>('SELECT * FROM invites WHERE id = $1', [param(req, 'id')]);
+  const row = await queryOne<InviteRow>('SELECT * FROM invites WHERE id = $1', [
+    uuidParam(req, 'id', 'That invite'),
+  ]);
   if (!row) throw notFound('That invite');
 
   await requireListAccess(row.list_id, user.id, 'owner');
@@ -122,6 +124,11 @@ inviteRouter.delete('/:id', requireAuth, writeLimiter, async (req, res) => {
 
 /* ── Invitee-facing: /api/invites/:token ─────────────────────────────────── */
 
+/**
+ * `param`, not `uuidParam`: a token is 16 random bytes in base64url, not a uuid,
+ * and `invites.token` is text — an unparseable one selects nothing rather than
+ * raising, so an unknown link still previews as `not_found`.
+ */
 async function loadByToken(token: string): Promise<InviteRow | null> {
   return queryOne<InviteRow>('SELECT * FROM invites WHERE token = $1', [token]);
 }
