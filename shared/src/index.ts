@@ -145,7 +145,22 @@ export interface CreateTaskBody {
 export interface UpdateTaskBody {
   title?: string;
   notes?: string | null;
-  position?: number;
+}
+
+/**
+ * Where a dragged task should land, named by the tasks either side of the slot
+ * it was dropped into. Positions are the server's to compute — it replies with
+ * the whole list, because running out of room between two floats makes it
+ * renumber every task at once.
+ *
+ * - To the top: `{ before: firstTaskId }`
+ * - To the bottom: `{ after: lastTaskId }`
+ * - Between two: `{ after: aboveId, before: belowId }` — either alone is enough,
+ *   and sending both lets the server notice the order moved under you.
+ */
+export interface MoveTaskBody {
+  after?: string | null;
+  before?: string | null;
 }
 
 export interface CreateInviteBody {
