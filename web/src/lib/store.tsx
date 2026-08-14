@@ -14,6 +14,7 @@ import { useAuth } from './auth';
 import { readCache, restoreSnapshot, savedAtFor, snapshotToPersist, type SavedMark } from './cache';
 import { auth } from './firebase';
 import { Outbox, type PendingTick } from './outbox';
+import { anchorsAround, moveWithin, orderBy } from './reorder';
 import { connectStream } from './stream';
 
 interface DataState {
@@ -31,6 +32,7 @@ interface DataState {
   setList: (detail: ListDetail) => void;
   dropList: (id: string) => void;
   toggleTask: (listId: string, task: Task) => void;
+  moveTask: (listId: string, taskId: string, toIndex: number) => void;
 }
 
 const DataContext = createContext<DataState | null>(null);
@@ -180,6 +182,71 @@ export function DataProvider({ children }: { children: ReactNode }) {
     [loadList, me],
   );
 
+  /**
+   * Moves a task to a new place in its list.
+   *
+   * The row is already where the finger left it by the time this is called, so
+   * the work here is telling the server and putting the list back if it says no.
+   * What comes back is applied wholesale rather than merged: exhausting the gap
+   * between two positions makes the server renumber every task at once, and the
+   * positions this device is holding are then all wrong at once.
+   *
+   * Nothing is queued when the request can't get through, unlike a tick. A tick
+   * replayed an hour later still means what it meant; a move replayed against a
+   * list somebody else has since rearranged does not.
+   */
+  const moveTask = useCallback(
+    (listId: string, taskId: string, toIndex: number) => {
+      const detail = details[listId];
+      if (!detail) return;
+
+      const from = detail.tasks.findIndex((task) => task.id === taskId);
+      if (from < 0 || from === toIndex) return;
+
+      const was = detail.tasks.map((task) => task.id);
+      const wanted = moveWithin(was, from, toIndex);
+      const anchors = anchorsAround(wanted, taskId);
+      if (!anchors) return;
+
+      // Applied to whatever is current rather than to the copy read above, so a
+      // tick that landed between the drag starting and ending survives the move.
+      const reorder = (ids: string[]) => (current: Record<string, ListDetail>) => {
+        const live = current[listId];
+        return live ? { ...current, [listId]: { ...live, tasks: orderBy(live.tasks, ids) } } : current;
+      };
+
+      setDetails(reorder(wanted));
+
+      void api
+        .moveTask(taskId, anchors)
+        .then(setList)
+        .catch((cause: unknown) => {
+          // Nothing was written on any refusal, so the order on screen is now a
+          // fiction either way.
+          setDetails(reorder(was));
+
+          if (cause instanceof OfflineError) {
+            setError('Could not move that — you appear to be offline');
+            return;
+          }
+          // The request named the tasks on both sides of the slot, so a refusal
+          // means this device's copy of the order is out of date rather than the
+          // drag being nonsense: something moved or was deleted while the row
+          // was in the air. Putting back an order that is itself stale would be
+          // the second wrong answer, so ask for the real one.
+          const message =
+            cause instanceof ApiError && cause.status === 403
+              ? cause.message
+              : 'Someone else changed the order — this is the list as it is now';
+          // And ask for it before saying anything: a successful load clears the
+          // error line, so a message set first is wiped by the very request
+          // that makes it true.
+          void loadList(listId).finally(() => setError(message));
+        });
+    },
+    [details, loadList, setList],
+  );
+
   /* Signing out — or somebody else signing in on a shared tablet — must leave
      the last person's lists and unsent ticks on neither the screen nor the disk. */
   useEffect(() => {
@@ -303,6 +370,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
       setList,
       dropList,
       toggleTask,
+      moveTask,
     }),
     [
       lists,
@@ -318,6 +386,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
       setList,
       dropList,
       toggleTask,
+      moveTask,
     ],
   );
 

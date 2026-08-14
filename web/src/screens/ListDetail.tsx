@@ -6,7 +6,7 @@ import { undoAnnouncement } from '../lib/a11y';
 import { useAuth } from '../lib/auth';
 import { useData } from '../lib/store';
 import { resetsInLabel } from '../lib/format';
-import { TaskRow } from '../components/TaskRow';
+import { TaskList } from '../components/TaskList';
 import {
   BackIcon,
   BottomBar,
@@ -27,7 +27,7 @@ export function ListDetail() {
   const { id = '' } = useParams();
   const navigate = useNavigate();
   const { me } = useAuth();
-  const { getList, loadList, setList, toggleTask, online, pending, savedAt } = useData();
+  const { getList, loadList, setList, toggleTask, moveTask, online, pending, savedAt } = useData();
 
   const list = getList(id);
   const [justDone, setJustDone] = useState<Task | null>(null);
@@ -180,18 +180,14 @@ export function ListDetail() {
             : 'The owner has not added any tasks yet.'}
         </EmptyState>
       ) : (
-        <div className="flex flex-1 flex-col gap-2 overflow-y-auto px-4 pt-0.5 pb-32 md:pb-6">
-          {list.tasks.map((task) => (
-            <TaskRow
-              key={task.id}
-              task={task}
-              meId={me?.id ?? null}
-              timezone={list.timezone}
-              onToggle={() => onToggle(task)}
-              onEdit={canEdit ? () => setEditing(task) : undefined}
-            />
-          ))}
-        </div>
+        <TaskList
+          tasks={list.tasks}
+          meId={me?.id ?? null}
+          timezone={list.timezone}
+          onToggle={onToggle}
+          onEdit={canEdit ? setEditing : undefined}
+          onMove={canEdit ? (taskId, toIndex) => moveTask(list.id, taskId, toIndex) : undefined}
+        />
       )}
 
       {/* Mounted always and empty until there is something to say, for the
