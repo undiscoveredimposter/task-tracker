@@ -1,5 +1,7 @@
 /** Environment, read once and validated loudly rather than failing at first use. */
 
+import { resolveWebRoot } from './web-root.js';
+
 function required(name: string): string {
   const value = process.env[name];
   if (!value) throw new Error(`Missing required environment variable ${name}`);
@@ -29,8 +31,13 @@ export const config = {
   databaseUrl: required('DATABASE_URL'),
   /** Public origin of the deployed app — used to build invite links. */
   appOrigin: optional('APP_ORIGIN', 'http://localhost:5173').replace(/\/+$/, ''),
-  /** Where the built PWA lives. Empty disables static serving (useful in dev). */
-  webRoot: optional('WEB_ROOT', ''),
+  /**
+   * Where the built PWA lives, as an absolute path. Empty disables static
+   * serving (useful in dev). A relative WEB_ROOT is resolved against the working
+   * directory once, here, so `existsSync`, `express.static` and `res.sendFile`
+   * cannot disagree about which directory it meant — see web-root.ts.
+   */
+  webRoot: resolveWebRoot(optional('WEB_ROOT', '')),
   nodeEnv: optional('NODE_ENV', 'development'),
   firebase: {
     projectId: optional('FIREBASE_PROJECT_ID', ''),
