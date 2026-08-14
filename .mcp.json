@@ -1,0 +1,19 @@
+{
+  "mcpServers": {
+    "coolify": {
+      "command": "npx",
+      "args": ["-y", "coolify-mcp-server"],
+      "env": {
+        "COOLIFY_BASE_URL": "${Coolify_Url}",
+        "COOLIFY_TOKEN": "${Coolify_Token}"
+      }
+    },
+    "firebase": {
+      "command": "npx",
+      "args": ["-y", "firebase-tools@latest", "mcp"],
+      "env": {
+        "GOOGLE_APPLICATION_CREDENTIALS": "${HOME}/.config/tally/firebase-service-account.json"
+      }
+    }
+  }
+}
