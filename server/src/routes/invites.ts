@@ -10,6 +10,7 @@ import { HttpError, notFound } from '../errors.js';
 import { requireListAccess } from '../lists.js';
 import { param } from '../http.js';
 import { inviteStatusOf } from '../invite-policy.js';
+import { inviteLookupLimiter, writeLimiter } from '../limits.js';
 
 export const inviteRouter: Router = Router();
 export const listInviteRouter: Router = Router({ mergeParams: true });
@@ -69,7 +70,7 @@ const createInviteSchema = z.object({
   maxUses: z.number().int().min(1).max(100).nullish(),
 });
 
-listInviteRouter.use(requireAuth);
+listInviteRouter.use(requireAuth, writeLimiter);
 
 listInviteRouter.get('/', async (req, res) => {
   const user = authed(req);
@@ -109,7 +110,7 @@ listInviteRouter.post('/', async (req, res) => {
 
 /* ── Owner-facing: /api/invites/:id ──────────────────────────────────────── */
 
-inviteRouter.delete('/:id', requireAuth, async (req, res) => {
+inviteRouter.delete('/:id', requireAuth, writeLimiter, async (req, res) => {
   const user = authed(req);
   const row = await queryOne<InviteRow>('SELECT * FROM invites WHERE id = $1', [param(req, 'id')]);
   if (!row) throw notFound('That invite');
@@ -125,7 +126,9 @@ async function loadByToken(token: string): Promise<InviteRow | null> {
   return queryOne<InviteRow>('SELECT * FROM invites WHERE token = $1', [token]);
 }
 
-inviteRouter.get('/token/:token', optionalAuth, async (req, res) => {
+// The limiter runs before `optionalAuth` on both token routes, so a flood is
+// refused before it costs a token verification or a database round trip.
+inviteRouter.get('/token/:token', inviteLookupLimiter, optionalAuth, async (req, res) => {
   const row = await loadByToken(param(req, 'token'));
   if (!row) {
     res.json({ status: 'not_found' } satisfies InvitePreview);
@@ -187,7 +190,7 @@ inviteRouter.get('/token/:token', optionalAuth, async (req, res) => {
   res.json(preview);
 });
 
-inviteRouter.post('/token/:token/accept', requireAuth, async (req, res) => {
+inviteRouter.post('/token/:token/accept', inviteLookupLimiter, requireAuth, async (req, res) => {
   const user = authed(req);
   const row = await loadByToken(param(req, 'token'));
   if (!row) throw notFound('That invite');

@@ -12,7 +12,7 @@ import {
   CheckIcon,
   EmptyState,
   ListSkeleton,
-  OfflineIcon,
+  OfflineBanner,
   PlusIcon,
   ProgressBar,
   Sheet,
@@ -26,7 +26,7 @@ export function ListDetail() {
   const { id = '' } = useParams();
   const navigate = useNavigate();
   const { me } = useAuth();
-  const { getList, loadList, setList, toggleTask, online, pending } = useData();
+  const { getList, loadList, setList, toggleTask, online, pending, savedAt } = useData();
 
   const list = getList(id);
   const [justDone, setJustDone] = useState<Task | null>(null);
@@ -47,8 +47,11 @@ export function ListDetail() {
         <Link to="/" aria-label="Back" className="-ml-3 flex size-11 items-center justify-center text-accent-ink">
           <BackIcon />
         </Link>
-        <EmptyState title="That list isn't here">
-          It may have been deleted, or you may no longer be a member.
+        {/* Offline, "isn't here" only means this device never saved a copy of it. */}
+        <EmptyState title={online ? "That list isn't here" : 'Not saved on this device'}>
+          {online
+            ? 'It may have been deleted, or you may no longer be a member.'
+            : "You're offline, and this list hasn't been opened on this device yet. It'll be here once you're back."}
         </EmptyState>
       </div>
     ) : (
@@ -159,14 +162,7 @@ export function ListDetail() {
         </div>
       </div>
 
-      {(!online || pending > 0) && (
-        <div className="anim-fadein mx-4 mb-2.5 flex shrink-0 items-center gap-2.5 rounded-xl bg-tint px-3.5 py-2.5 text-[13px] font-medium text-accent-ink">
-          <OfflineIcon />
-          {pending > 0
-            ? `Offline — ${pending} tick${pending === 1 ? '' : 's'} waiting to sync`
-            : "Offline — you can still tick things off"}
-        </div>
-      )}
+      <OfflineBanner online={online} pending={pending} savedAt={savedAt} />
 
       {list.tasks.length === 0 ? (
         <EmptyState

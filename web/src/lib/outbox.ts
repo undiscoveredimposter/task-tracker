@@ -11,6 +11,7 @@ export interface PendingTick {
 export interface OutboxStorage {
   getItem(key: string): string | null;
   setItem(key: string, value: string): void;
+  removeItem(key: string): void;
 }
 
 export interface FlushResult {
@@ -103,9 +104,17 @@ export class Outbox {
     this.write();
   }
 
+  /**
+   * Throws the queue away. Used on sign-out: replaying one person's ticks under
+   * the next person's token would credit them to the wrong person.
+   */
   clear(): void {
     this.queue = [];
-    this.write();
+    try {
+      this.storage.removeItem(this.key);
+    } catch {
+      // Same bargain as write() — nothing here is worth failing over.
+    }
   }
 
   /**

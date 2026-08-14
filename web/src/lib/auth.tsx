@@ -1,7 +1,8 @@
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { onAuthStateChanged, type User } from 'firebase/auth';
 import type { Me } from '@tally/shared';
-import { api, setTokenSource } from './api';
+import { OfflineError, api, setTokenSource } from './api';
+import { readCache } from './cache';
 import { auth, firebaseConfigured, signOutOfTally } from './firebase';
 
 interface AuthState {
@@ -40,15 +41,43 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setLoading(false);
         return;
       }
+      // Firebase restores a session without a network, so an offline launch
+      // gets this far and then can't ask who the user is. The remembered
+      // profile stands in until it can.
+      const remembered = readCache.read(user.uid)?.me ?? null;
+      if (remembered) setMe(remembered);
+
       // The first authenticated call is what creates the row on our side, so
       // this doubles as registration.
       api
         .me()
         .then(setMe)
-        .catch((cause: Error) => setError(cause.message))
+        .catch((cause: Error) => {
+          if (cause instanceof OfflineError && remembered) return;
+          setError(cause.message);
+        })
         .finally(() => setLoading(false));
     });
   }, []);
+
+  /* Offline with nothing saved, the fetch above failed and there is no profile
+     to render anything with. Firebase won't call back again — the session was
+     already restored — so the return of the network is the only cue left. */
+  useEffect(() => {
+    if (me || !firebaseUser) return;
+
+    const retry = () => {
+      api
+        .me()
+        .then((profile) => {
+          setMe(profile);
+          setError(null);
+        })
+        .catch(() => undefined);
+    };
+    window.addEventListener('online', retry);
+    return () => window.removeEventListener('online', retry);
+  }, [me, firebaseUser]);
 
   const value = useMemo<AuthState>(
     () => ({

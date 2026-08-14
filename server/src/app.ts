@@ -7,6 +7,7 @@ import { config } from './config.js';
 import { errorHandler } from './errors.js';
 import { subscriberCount } from './events.js';
 import { pool } from './db.js';
+import { writeLimiter } from './limits.js';
 import { inviteRouter, listInviteRouter } from './routes/invites.js';
 import { listsRouter } from './routes/lists.js';
 import { membersRouter } from './routes/members.js';
@@ -24,6 +25,8 @@ export function createApp(): Express {
   app.use(cors({ origin: true, credentials: false }));
   app.use(express.json({ limit: '64kb' }));
 
+  // Mounted ahead of every limiter: Coolify polls this every 15 seconds and a
+  // 429 here would look like a sick container and take the app out of rotation.
   app.get('/api/health', async (_req, res) => {
     try {
       await pool.query('SELECT 1');
@@ -45,12 +48,17 @@ export function createApp(): Express {
 
   // The invite preview is deliberately outside requireAuth — someone opening a
   // link before signing in still needs to see what they've been invited to.
+  // That makes it the one unlocked door, so it carries its own limiter; see
+  // routes/invites.ts.
   app.use('/api/invites', inviteRouter);
 
+  // `writeLimiter` goes after `requireAuth` on each mount so it can charge the
+  // request to the person rather than to the household's shared address. It
+  // skips reads, so the GETs on these routers are untouched.
   app.use('/api/lists/:id/invites', listInviteRouter);
-  app.use('/api/lists/:id/members', requireAuth, membersRouter);
-  app.use('/api/lists', requireAuth, listsRouter);
-  app.use('/api/tasks', requireAuth, tasksRouter);
+  app.use('/api/lists/:id/members', requireAuth, writeLimiter, membersRouter);
+  app.use('/api/lists', requireAuth, writeLimiter, listsRouter);
+  app.use('/api/tasks', requireAuth, writeLimiter, tasksRouter);
   app.use('/api/stream', requireAuth, streamRouter);
 
   app.use('/api', (_req, res) => {

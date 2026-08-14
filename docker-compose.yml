@@ -50,6 +50,17 @@ services:
 
       INVITE_DEFAULT_DAYS: ${INVITE_DEFAULT_DAYS:-7}
 
+      # Request budgets, per minute. Counters are in-memory, which assumes one
+      # app instance — the same assumption /api/stream already makes. Both must
+      # be above zero; the server refuses to start otherwise rather than
+      # answering every request with a 429 nobody can explain.
+      #
+      # Invite lookups are per client address and cover the one unauthenticated
+      # route. Writes are per signed-in person, so a household on one connection
+      # gets a budget each.
+      RATE_LIMIT_INVITE_LOOKUPS_PER_MINUTE: ${RATE_LIMIT_INVITE_LOOKUPS_PER_MINUTE:-20}
+      RATE_LIMIT_WRITES_PER_MINUTE: ${RATE_LIMIT_WRITES_PER_MINUTE:-240}
+
     # Coolify's proxy terminates TLS and routes to this port; the container is
     # not published on the host directly.
     expose:

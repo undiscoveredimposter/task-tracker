@@ -11,6 +11,7 @@ import {
 import type { ListDetail, ListSummary, ServerEvent, Task } from '@tally/shared';
 import { ApiError, api, OfflineError } from './api';
 import { useAuth } from './auth';
+import { readCache, restoreSnapshot, savedAtFor, snapshotToPersist, type SavedMark } from './cache';
 import { auth } from './firebase';
 import { Outbox, type PendingTick } from './outbox';
 import { connectStream } from './stream';
@@ -22,6 +23,8 @@ interface DataState {
   connected: boolean;
   online: boolean;
   pending: number;
+  /** When what's on screen last matched the server. Null until it ever has. */
+  savedAt: number | null;
   refreshLists: () => Promise<void>;
   getList: (id: string) => ListDetail | undefined;
   loadList: (id: string) => Promise<ListDetail | undefined>;
@@ -35,7 +38,8 @@ const DataContext = createContext<DataState | null>(null);
 const storage: Storage | undefined = typeof window === 'undefined' ? undefined : window.localStorage;
 
 export function DataProvider({ children }: { children: ReactNode }) {
-  const { me } = useAuth();
+  const { me, firebaseUser } = useAuth();
+  const uid = firebaseUser?.uid ?? null;
   const [lists, setLists] = useState<ListSummary[]>([]);
   const [details, setDetails] = useState<Record<string, ListDetail>>({});
   const [listsLoading, setListsLoading] = useState(true);
@@ -43,33 +47,47 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const [connected, setConnected] = useState(false);
   const [online, setOnline] = useState(() => navigator.onLine);
   const [pending, setPending] = useState(0);
+  const [saved, setSaved] = useState<SavedMark | null>(null);
+  const savedAt = savedAtFor(saved, uid);
 
   const outbox = useRef<Outbox>(
-    new Outbox(storage ?? { getItem: () => null, setItem: () => undefined }),
+    new Outbox(
+      storage ?? { getItem: () => null, setItem: () => undefined, removeItem: () => undefined },
+    ),
   );
+  const hydratedFor = useRef<string | null>(null);
+  const lastUid = useRef<string | null>(null);
 
+  /* Both fetches stamp what came back with the account it came back for. The
+     closure's uid is the right one even if the signed-in account has moved on
+     mid-flight — it names whose data this is, not who is looking. */
   const refreshLists = useCallback(async () => {
     try {
       setLists(await api.lists());
+      if (uid) setSaved({ uid, at: Date.now() });
       setError(null);
     } catch (cause) {
       if (!(cause instanceof OfflineError)) setError((cause as Error).message);
     } finally {
       setListsLoading(false);
     }
-  }, []);
+  }, [uid]);
 
-  const loadList = useCallback(async (id: string) => {
-    try {
-      const detail = await api.list(id);
-      setDetails((current) => ({ ...current, [id]: detail }));
-      setError(null);
-      return detail;
-    } catch (cause) {
-      if (!(cause instanceof OfflineError)) setError((cause as Error).message);
-      return undefined;
-    }
-  }, []);
+  const loadList = useCallback(
+    async (id: string) => {
+      try {
+        const detail = await api.list(id);
+        setDetails((current) => ({ ...current, [id]: detail }));
+        if (uid) setSaved({ uid, at: Date.now() });
+        setError(null);
+        return detail;
+      } catch (cause) {
+        if (!(cause instanceof OfflineError)) setError((cause as Error).message);
+        return undefined;
+      }
+    },
+    [uid],
+  );
 
   const setList = useCallback((detail: ListDetail) => {
     setDetails((current) => ({ ...current, [detail.id]: detail }));
@@ -162,6 +180,48 @@ export function DataProvider({ children }: { children: ReactNode }) {
     [loadList, me],
   );
 
+  /* Signing out — or somebody else signing in on a shared tablet — must leave
+     the last person's lists and unsent ticks on neither the screen nor the disk. */
+  useEffect(() => {
+    if (lastUid.current && lastUid.current !== uid) {
+      readCache.clear();
+      outbox.current.clear();
+      hydratedFor.current = null;
+      setLists([]);
+      setDetails({});
+      setSaved(null);
+      setPending(0);
+      setListsLoading(true);
+    }
+    lastUid.current = uid;
+  }, [uid]);
+
+  /* The saved copy goes up before the network is asked anything, so a list is
+     on screen in a lift or a basement. Live data replaces it when the request
+     lands; offline it simply stays. */
+  useEffect(() => {
+    if (!uid || hydratedFor.current === uid) return;
+    hydratedFor.current = uid;
+
+    const snapshot = readCache.read(uid);
+    if (!snapshot) return;
+
+    const restored = restoreSnapshot(snapshot, outbox.current.pending);
+    setLists(restored.lists);
+    setDetails(restored.details);
+    setSaved({ uid, at: snapshot.savedAt });
+    setListsLoading(false);
+  }, [uid]);
+
+  /* Keep that copy up to date, optimistic ticks included. The mark travels with
+     the data rather than being the moment of the write, so a copy that has sat
+     offline all morning still says when it was last true — and says whose it is,
+     which is what stops one account's lists reaching another's disk. */
+  useEffect(() => {
+    const snapshot = snapshotToPersist(uid, me, saved, lists, details);
+    if (snapshot) readCache.write(snapshot);
+  }, [uid, me, saved, lists, details]);
+
   /* Initial load. */
   useEffect(() => {
     if (!me) return;
@@ -236,6 +296,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
       connected,
       online,
       pending,
+      savedAt,
       refreshLists,
       getList: (id: string) => details[id],
       loadList,
@@ -250,6 +311,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
       connected,
       online,
       pending,
+      savedAt,
       details,
       refreshLists,
       loadList,

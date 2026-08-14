@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import type { UserRef } from '@tally/shared';
-import { initialOf } from '../lib/format';
+import { initialOf, offlineLabel } from '../lib/format';
 
 /* ── Icons ───────────────────────────────────────────────────────────────── */
 
@@ -36,12 +36,19 @@ export const CloseIcon = ({ size = 20 }: { size?: number }) => (
   </svg>
 );
 
-export const OfflineIcon = ({ size = 16 }: { size?: number }) => (
-  <svg width={size} height={size} viewBox="0 0 24 24" {...stroke} strokeWidth={2}>
+export const OfflineIcon = ({ size = 16, className = '' }: { size?: number; className?: string }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" {...stroke} strokeWidth={2} className={className}>
     <path d="M3 3l18 18" />
     <path d="M5 10a12 12 0 0 1 5.4-3M12.5 6.6A12 12 0 0 1 21 10" opacity={0.7} />
     <path d="M8 13.5a7 7 0 0 1 2.5-1.5M13.7 12.3a7 7 0 0 1 2.8 1.7" opacity={0.7} />
     <circle cx="12" cy="17.5" r="1.4" fill="currentColor" stroke="none" />
+  </svg>
+);
+
+export const UpdateIcon = ({ size = 18 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" {...stroke} strokeWidth={2} className="shrink-0">
+    <path d="M20 12a8 8 0 1 1-2.4-5.7" />
+    <path d="M20.5 3.8V8h-4.2" />
   </svg>
 );
 
@@ -209,6 +216,30 @@ export function Sheet({
         </div>
         {children}
       </div>
+    </div>
+  );
+}
+
+/**
+ * Says what the network is doing and, when the data is a remembered copy, how
+ * old it is. Renders nothing when there is nothing worth saying.
+ */
+export function OfflineBanner({
+  online,
+  pending,
+  savedAt,
+}: {
+  online: boolean;
+  pending: number;
+  savedAt: number | null;
+}) {
+  const label = offlineLabel({ online, pending, savedAt });
+  if (!label) return null;
+
+  return (
+    <div className="anim-fadein mx-4 mb-2.5 flex shrink-0 items-center gap-2.5 rounded-xl bg-tint px-3.5 py-2.5 text-[13px] font-medium text-accent-ink">
+      <OfflineIcon className="shrink-0" />
+      {label}
     </div>
   );
 }
