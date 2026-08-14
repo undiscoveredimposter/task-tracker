@@ -1,5 +1,4 @@
 import { existsSync } from 'node:fs';
-import { join } from 'node:path';
 import cors from 'cors';
 import express, { type Express } from 'express';
 import { requireAuth } from './auth.js';
@@ -67,9 +66,21 @@ export function createApp(): Express {
 
   // Serve the built PWA from the same origin, which keeps the API same-origin
   // and sidesteps CORS and third-party cookie behaviour entirely.
-  if (config.webRoot && existsSync(config.webRoot)) {
-    const indexHtml = join(config.webRoot, 'index.html');
+  //
+  // config.webRoot is absolute by the time it gets here; express.static and
+  // res.sendFile disagree about relative paths, and the disagreement showed up
+  // as a server that served every asset and 500'd every page navigation.
+  const webRootExists = config.webRoot !== '' && existsSync(config.webRoot);
 
+  if (config.webRoot && !webRootExists) {
+    // The healthcheck only touches /api/health, so nothing else would say this
+    // out loud: the container would come up green and serve no pages at all.
+    console.warn(
+      `[tally] WEB_ROOT is set to ${config.webRoot}, which does not exist — serving the API only`,
+    );
+  }
+
+  if (webRootExists) {
     app.use(
       express.static(config.webRoot, {
         index: false,
@@ -87,10 +98,17 @@ export function createApp(): Express {
 
     // SPA fallback as a bare middleware rather than a wildcard route — Express 5
     // is strict about path syntax and this needs no pattern at all.
+    //
+    // Sent relative to `root` rather than as one absolute path: with no root,
+    // send() applies its dotfile rule to every segment of the path it is given,
+    // including the ones we chose, so an app installed anywhere under a
+    // dot-directory — /srv/.deploy, a git worktree under .claude, ~/.cache —
+    // answers every page navigation with a 404 while still serving its assets.
+    // With a root, the rule covers only the part a request can influence.
     app.use((req, res, next) => {
       if (req.method !== 'GET' && req.method !== 'HEAD') return next();
       res.setHeader('Cache-Control', 'no-cache');
-      res.sendFile(indexHtml);
+      res.sendFile('index.html', { root: config.webRoot });
     });
   }
 
