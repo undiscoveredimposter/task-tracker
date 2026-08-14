@@ -148,6 +148,18 @@ export interface UpdateTaskBody {
   position?: number;
 }
 
+/**
+ * Where to drop a task, said in terms of its new neighbours rather than a
+ * number. The server owns `position`; the client only has to name what the task
+ * should end up next to. Give one anchor or both — both must be adjacent.
+ */
+export interface MoveTaskBody {
+  /** Put the task directly above this one. */
+  before?: string | null;
+  /** Put the task directly below this one. */
+  after?: string | null;
+}
+
 export interface CreateInviteBody {
   role: Exclude<Role, 'owner'>;
   /** Days until the link stops working. Null keeps it alive indefinitely. */

@@ -136,7 +136,10 @@ async function tasksOf(listId: string, periodKey: string): Promise<Task[]> {
        LEFT JOIN task_completions c ON c.task_id = t.id AND c.period_key = $2
        LEFT JOIN users u ON u.id = c.completed_by
       WHERE t.list_id = $1 AND t.archived_at IS NULL
-      ORDER BY t.position, t.created_at`,
+      -- Total, not merely deterministic: position can tie on the column default
+      -- and created_at can tie inside one transaction. The same three columns
+      -- order the move endpoint's snapshot, and the two have to agree.
+      ORDER BY t.position, t.created_at, t.id`,
     [listId, periodKey],
   );
 
