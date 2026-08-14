@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { contrastRatio } from './contrast';
+import { contrastRatio, over } from './contrast';
 
 describe('contrastRatio', () => {
   it('is 21 between black and white, the widest there is', () => {
@@ -41,6 +41,31 @@ describe('contrastRatio', () => {
   });
 });
 
+describe('over', () => {
+  it('gives back the colour that actually lands on the screen', () => {
+    expect(over('rgba(0, 0, 0, 0.5)', '#ffffff')).toBe('rgb(128, 128, 128)');
+  });
+
+  it('leaves an opaque colour where it is', () => {
+    expect(over('#5d5294', '#ffffff')).toBe('rgb(93, 82, 148)');
+  });
+
+  it('returns something contrastRatio can read straight back', () => {
+    expect(contrastRatio(over('rgba(0, 0, 0, 0.5)', '#ffffff'), '#ffffff')).toBeCloseTo(
+      contrastRatio('#808080', '#ffffff'),
+      5,
+    );
+  });
+
+  it('composites twice differently from compositing once', () => {
+    // The point of the function: a border over a card is not the same colour as
+    // the same border over the page, even though the token is identical.
+    expect(over('rgba(41, 43, 49, 0.54)', '#fdfdff')).not.toBe(
+      over('rgba(41, 43, 49, 0.54)', '#f3f5fe'),
+    );
+  });
+});
+
 /* ── The palettes, as shipped ────────────────────────────────────────────── */
 
 const css = readFileSync(new URL('../index.css', import.meta.url), 'utf8');
@@ -70,7 +95,8 @@ const PAIRS: [fg: string, bg: string, min: number, where: string][] = [
   ['ink', 'surface', AA_TEXT, 'task titles on a card'],
   ['ink', 'ground', AA_TEXT, 'screen headings'],
   ['muted', 'surface', AA_TEXT, 'notes under a task, hints on a card'],
-  ['muted', 'ground', AA_TEXT, 'the reset countdown, sign-in small print'],
+  ['muted', 'ground', AA_TEXT, 'the reset countdown in a list header, sign-in small print'],
+  ['muted', 'tint', AA_TEXT, 'the open list in the desktop sidebar — the tightest muted pairing'],
   ['muted', 'tint-2', AA_TEXT, 'the cadence explainer in list settings'],
   ['accent-ink', 'surface', AA_TEXT, 'the "Sam · 7:42am" line on a done row'],
   ['accent-ink', 'ground', AA_TEXT, 'the Stats / Share / Settings links'],
@@ -83,14 +109,18 @@ const PAIRS: [fg: string, bg: string, min: number, where: string][] = [
   ['toast-ink', 'toast-btn', AA_TEXT, 'the Undo button inside it'],
   ['check-ink', 'accent', AA_TEXT, 'the tick inside a completed checkbox'],
   ['outline', 'surface', AA_NON_TEXT, 'the ring on an unticked task — the whole point of the row'],
+  ['control', 'surface', AA_NON_TEXT, 'the edge of a text field, a plain button, an unselected chip'],
   ['accent', 'surface', AA_NON_TEXT, 'the focus ring, and the primary button border'],
   ['accent', 'ground', AA_NON_TEXT, 'the focus ring, and the primary button border'],
   ['accent', 'track', AA_NON_TEXT, 'the progress bar against its groove'],
 ];
 
-// `divider` is left out on purpose: at 1.3:1 it fails 1.4.11 wherever it draws
-// the edge of a text field, but it is also every hairline in the app, so
-// changing it is a design decision rather than a fix. Tracked separately.
+// `divider` still has no row, and that is now a decision rather than an
+// omission. It draws hairlines between regions — the rule under the top bar,
+// the sidebar edge, the "or with email" line, the one above the danger zone —
+// and none of them carries meaning, so 1.4.11 does not reach them and taking
+// them to 3:1 would only make the app heavier. Everything that is genuinely a
+// control's boundary moved to `control`, which is scored above.
 
 describe.each([
   ['light', ':root {'],
@@ -108,10 +138,50 @@ describe.each([
   });
 });
 
+/**
+ * A control has two edges and the pairs above only score one of them.
+ *
+ * `background-clip` is `border-box`, so `control` paints over the control's own
+ * `surface` fill rather than over the page — which makes the outer edge a
+ * different sum from the inner one, and the weaker of the two in light. Scoring
+ * the raw token against `ground` reads 3.26:1 where the screen shows 3.09:1,
+ * which is exactly the kind of gap between source and pixels that lets a
+ * failure ship.
+ */
+describe.each([
+  ['light', ':root {'],
+  ['dark, from the operating system', ":root:not([data-theme='light']) {"],
+  ['dark, chosen explicitly', ":root[data-theme='dark'] {"],
+])('a filled control in the %s palette', (_name, selector) => {
+  const tokens = palette(selector);
+
+  it('has an outer edge that clears 3:1 against the page behind it', () => {
+    const edge = over(tokens.control!, tokens.surface!);
+    expect(contrastRatio(edge, tokens.ground!)).toBeGreaterThanOrEqual(AA_NON_TEXT);
+  });
+});
+
 describe('the two ways of reaching dark', () => {
   it('define the same palette, so a chosen dark matches an inherited one', () => {
     expect(palette(":root[data-theme='dark'] {")).toEqual(
       palette(":root:not([data-theme='light']) {"),
     );
+  });
+});
+
+describe('the component rules that draw a control', () => {
+  /** The declarations in the block a component selector opens. */
+  function rule(selector: string): string {
+    const start = css.indexOf(`${selector} {`);
+    expect(start, `${selector} is missing from index.css`).toBeGreaterThan(-1);
+    return css.slice(start, css.indexOf('}', start));
+  }
+
+  // The pairings above only prove the token is strong enough. This is the half
+  // that keeps regressing: a field's edge is a component boundary, and reaching
+  // for the hairline because it is the quieter of the two is how it got to
+  // 1.3:1 in the first place.
+  it.each(['.field', '.btn-plain'])('%s takes its border from --t-control', (selector) => {
+    expect(rule(selector)).toMatch(/border:[^;]*var\(--t-control\)/);
   });
 });

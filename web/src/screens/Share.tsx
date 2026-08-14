@@ -102,7 +102,7 @@ export function Share() {
                 onClick={() => setRole(id_)}
                 aria-pressed={role === id_}
                 className={`flex min-h-[68px] flex-1 flex-col items-start gap-0.5 rounded-2xl px-3.5 py-2.5 text-left ${
-                  role === id_ ? 'border-[1.5px] border-accent bg-tint' : 'border border-divider bg-surface'
+                  role === id_ ? 'border-[1.5px] border-accent bg-tint' : 'border border-control bg-surface'
                 }`}
               >
                 <span className="text-[15px] font-semibold">{label}</span>
@@ -114,7 +114,7 @@ export function Share() {
           {fresh ? (
             <div className="anim-fadein flex flex-col gap-2">
               <div className="flex gap-2">
-                <span className="flex min-h-13 flex-1 items-center overflow-hidden rounded-2xl border border-divider bg-surface px-3.5 font-mono text-[13px] text-ellipsis whitespace-nowrap text-muted">
+                <span className="flex min-h-13 flex-1 items-center overflow-hidden rounded-2xl border border-control bg-surface px-3.5 font-mono text-[13px] text-ellipsis whitespace-nowrap text-muted">
                   {fresh.url}
                 </span>
                 <button

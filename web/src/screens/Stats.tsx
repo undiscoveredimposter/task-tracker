@@ -56,7 +56,7 @@ export function Stats() {
         <div className="card rounded-2xl p-[18px]">
           <div className="mb-3.5 flex items-center justify-between">
             <span className="text-[15px] font-semibold">Together</span>
-            <span className="inline-flex overflow-hidden rounded-lg border border-divider">
+            <span className="inline-flex overflow-hidden rounded-lg border border-control">
               {[7, 30].map((option) => (
                 <button
                   key={option}
