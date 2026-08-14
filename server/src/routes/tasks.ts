@@ -12,7 +12,7 @@ import {
   requireListAccess,
   type ListRow,
 } from '../lists.js';
-import { param } from '../http.js';
+import { uuidParam } from '../http.js';
 import { planMove, type MoveRefusal, type MoveResult } from '../ordering.js';
 
 export const tasksRouter: Router = Router();
@@ -43,7 +43,7 @@ const updateTaskSchema = z.object({
 
 tasksRouter.patch('/:id', async (req, res) => {
   const user = authed(req);
-  const { task, list } = await taskAccess(param(req, 'id'), user.id, 'editor');
+  const { task, list } = await taskAccess(uuidParam(req, 'id', 'That task'), user.id, 'editor');
   const body = updateTaskSchema.parse(req.body);
 
   await query(
@@ -99,7 +99,7 @@ function moveRefused(reason: MoveRefusal): HttpError {
 tasksRouter.post('/:id/move', async (req, res) => {
   const user = authed(req);
   // Viewers tick; only editors rearrange.
-  const { task, list, role } = await taskAccess(param(req, 'id'), user.id, 'editor');
+  const { task, list, role } = await taskAccess(uuidParam(req, 'id', 'That task'), user.id, 'editor');
   const body = moveTaskSchema.parse(req.body ?? {});
 
   const result = await transaction<MoveResult>(async (client) => {
@@ -156,7 +156,7 @@ tasksRouter.post('/:id/move', async (req, res) => {
 
 tasksRouter.delete('/:id', async (req, res) => {
   const user = authed(req);
-  const { task, list } = await taskAccess(param(req, 'id'), user.id, 'editor');
+  const { task, list } = await taskAccess(uuidParam(req, 'id', 'That task'), user.id, 'editor');
 
   // Soft delete — the completions behind it are what the stats are made of.
   await query('UPDATE tasks SET archived_at = now() WHERE id = $1', [task.id]);
@@ -169,7 +169,7 @@ tasksRouter.delete('/:id', async (req, res) => {
 tasksRouter.post('/:id/complete', async (req, res) => {
   const user = authed(req);
   // Viewers can tick — that is the whole point of a viewer.
-  const { task, list } = await taskAccess(param(req, 'id'), user.id, 'viewer');
+  const { task, list } = await taskAccess(uuidParam(req, 'id', 'That task'), user.id, 'viewer');
   const period = currentPeriod(list);
 
   // The period key comes from the server, never the client, so two phones with
@@ -213,7 +213,7 @@ tasksRouter.post('/:id/complete', async (req, res) => {
 
 tasksRouter.delete('/:id/complete', async (req, res) => {
   const user = authed(req);
-  const { task, list } = await taskAccess(param(req, 'id'), user.id, 'viewer');
+  const { task, list } = await taskAccess(uuidParam(req, 'id', 'That task'), user.id, 'viewer');
   const period = currentPeriod(list);
 
   await query('DELETE FROM task_completions WHERE task_id = $1 AND period_key = $2', [
