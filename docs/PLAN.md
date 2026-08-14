@@ -170,9 +170,29 @@ local state — no refetch. Reconnect with backoff, and refetch the list on reco
 SSE over WebSockets because the traffic is one-directional (writes go over normal HTTP) and SSE
 survives proxies and reconnects on its own.
 
-This assumes **one app instance**. Running two containers behind Coolify's proxy would mean a tick
-on instance A doesn't reach a listener on instance B. If that day comes, swap the in-memory map for
-Postgres `LISTEN`/`NOTIFY` — roughly 30 lines, no API change. Noting it now so it isn't a surprise.
+**Across instances.** An SSE connection is held by one process, so that map is necessarily local.
+Every mutation is therefore *also* published on a Postgres channel with `pg_notify`, and every
+instance holds a `LISTEN` on it and delivers to whichever devices happen to be connected to it. Two
+containers behind Coolify's proxy stay in step; there is no change to the API or to `ServerEvent`.
+
+Four things that shape the implementation:
+
+- **A dedicated connection.** The `LISTEN` is on a `pg.Client` of its own, never one borrowed from
+  the pool — a pooled client is handed back and eventually closed when idle, and the subscription
+  would go with it silently.
+- **Reconnect, loudly.** When that connection drops the instance is deaf, and nothing errors. So a
+  drop is logged, retried forever with jittered backoff, and surfaced as `live` on `/api/health`.
+  Browsers are unaffected: their SSE connection is to us, not to Postgres. A client mid-stream sees
+  nothing at all, except that events raised on *other* instances pause until the gap closes.
+- **Nothing is replayed.** `NOTIFY` has no backlog, so events raised during a gap are lost — which
+  is why clients refetch on reconnect rather than treating the stream as the source of truth.
+- **Identifiers, not rows.** A `NOTIFY` payload is capped at 8000 bytes. The payload carries the
+  list id and the event; the audience is resolved by each instance from `list_members`, so
+  membership size can't push it over. An event whose body is somehow too big degrades to
+  `task.changed`, which the client already handles by refetching.
+
+The channel is `tally_events`, overridable with `TALLY_EVENT_CHANNEL`. Channels are per-database
+rather than per-schema, so two deployments sharing a database need different names.
 
 ## 7. Auth flow
 
@@ -219,7 +239,8 @@ you chose links that aren't email-locked.
 - Healthcheck `GET /api/health`; Coolify handles TLS and the domain.
 
 **Server env:** `DATABASE_URL`, `FIREBASE_PROJECT_ID`, `FIREBASE_CLIENT_EMAIL`,
-`FIREBASE_PRIVATE_KEY`, `APP_ORIGIN`, `PORT`.
+`FIREBASE_PRIVATE_KEY`, `APP_ORIGIN`, `PORT`. Optionally `TALLY_EVENT_CHANNEL` (§6) — only needed
+if another deployment shares the same database.
 
 **Web env (build-time):** `VITE_FIREBASE_API_KEY`, `VITE_FIREBASE_AUTH_DOMAIN`,
 `VITE_FIREBASE_PROJECT_ID`, `VITE_FIREBASE_APP_ID`.
@@ -238,7 +259,8 @@ account key is server-side only and must never reach `web/`.)
 2. **Timezone changes mid-period.** Editing a list's timezone or reset hour changes the current
    period key, so today's ticks appear to vanish (the old rows survive; they're just keyed to the
    old period). I'll warn in the settings UI before saving.
-3. **Single instance for SSE** — §6.
+3. ~~**Single instance for SSE**~~ — resolved. Events fan out through Postgres `LISTEN`/`NOTIFY`,
+   so more than one container works. See §6 for what a listener outage does and doesn't affect.
 4. **Firebase authorized domains** — §7. Fails only in production, so it's easy to miss.
 
 ## 12. Build order

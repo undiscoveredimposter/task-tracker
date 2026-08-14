@@ -64,6 +64,14 @@ export interface Harness {
   /** The app's own pool, scoped to this file's schema — for asserting on rows. */
   sql: pg.Pool;
   schema: string;
+  /**
+   * The Postgres channel this instance fans live updates out over. Channels are
+   * per-database, not per-schema, so each file gets its own — otherwise two
+   * suites running side by side would hear each other's events.
+   */
+  eventChannel: string;
+  /** This instance's id, as it appears in the `origin` of what it publishes. */
+  instanceId: string;
   /** Applies any migrations this schema hasn't seen. Safe to call repeatedly. */
   migrate(): Promise<void>;
   /** Tables present in this schema, alphabetically. */
@@ -151,14 +159,24 @@ export async function startHarness(options: HarnessOptions = {}): Promise<Harnes
   // low values through `options.env` and is where the limits are actually tested.
   process.env.RATE_LIMIT_INVITE_LOOKUPS_PER_MINUTE = '100000';
   process.env.RATE_LIMIT_WRITES_PER_MINUTE = '100000';
+  // A NOTIFY channel is database-wide, so the schema trick that isolates rows
+  // does nothing for events. Reuse the schema name, which is already unique per
+  // file and is a valid identifier.
+  process.env.TALLY_EVENT_CHANNEL = schema;
 
   for (const [key, value] of Object.entries(options.env ?? {})) process.env[key] = value;
 
   const { pool } = await import('../../src/db.ts');
   const { migrate } = await import('../../src/migrate.ts');
   const { createApp } = await import('../../src/app.ts');
+  const events = await import('../../src/events.ts');
 
   if (options.migrate !== false) await migrate();
+
+  // What index.ts does at boot: this harness is one app instance, listener and
+  // all, so a test can stand a second publisher next to it and watch an event
+  // cross between them.
+  await events.startEventListener();
 
   const server: Server = createApp().listen(0, '127.0.0.1');
   await once(server, 'listening');
@@ -204,6 +222,8 @@ export async function startHarness(options: HarnessOptions = {}): Promise<Harnes
     baseUrl,
     sql: pool,
     schema,
+    eventChannel: process.env.TALLY_EVENT_CHANNEL!,
+    instanceId: events.instanceId(),
 
     migrate,
 
@@ -251,6 +271,9 @@ export async function startHarness(options: HarnessOptions = {}): Promise<Harnes
     },
 
     async close() {
+      // Before the pool, and before the schema goes: the listener holds its own
+      // connection and a retry timer, and either would keep the process alive.
+      await events.stopEventListener();
       server.closeAllConnections?.();
       await new Promise<void>((resolve) => server.close(() => resolve()));
       await pool.end();

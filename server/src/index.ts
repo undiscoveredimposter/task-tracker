@@ -1,7 +1,7 @@
 import { createApp } from './app.js';
 import { config } from './config.js';
 import { pool } from './db.js';
-import { startHeartbeat } from './events.js';
+import { startEventListener, startHeartbeat, stopEventListener } from './events.js';
 import { reportAuthMode } from './firebase.js';
 import { migrate } from './migrate.js';
 
@@ -10,6 +10,12 @@ async function main(): Promise<void> {
   // traffic against a schema it doesn't expect.
   await migrate();
   reportAuthMode();
+
+  // Before the port opens, so an instance is never briefly serving streams it
+  // cannot hear other instances on. It retries rather than throwing, so a
+  // database that is up for migrations but slow to accept another connection
+  // delays live updates instead of the whole boot.
+  await startEventListener();
 
   const app = createApp();
   const heartbeat = startHeartbeat();
@@ -26,6 +32,7 @@ async function main(): Promise<void> {
   const shutdown = async (signal: string) => {
     console.log(`[tally] ${signal} — shutting down`);
     clearInterval(heartbeat);
+    await stopEventListener();
     server.closeAllConnections?.();
     server.close(() => void pool.end().then(() => process.exit(0)));
     setTimeout(() => process.exit(0), 8000).unref();
