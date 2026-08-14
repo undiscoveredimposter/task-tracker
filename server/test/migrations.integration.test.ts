@@ -2,6 +2,9 @@ import assert from 'node:assert/strict';
 import { after, before, describe, it } from 'node:test';
 import { SKIP_REASON, startHarness, type Harness } from './helpers/harness.ts';
 
+/** Every migration that has shipped, in the order migrate() applies them. */
+const MIGRATIONS = ['001_init.sql', '002_task_positions.sql'];
+
 /**
  * Migrations run on container boot, before the port opens. Two things have to
  * hold or a deploy is a coin toss: they must build the schema from nothing, and
@@ -36,7 +39,7 @@ describe('migrations', { skip: SKIP_REASON }, () => {
       'tasks',
       'users',
     ]);
-    assert.deepEqual(await h.appliedMigrations(), ['001_init.sql']);
+    assert.deepEqual(await h.appliedMigrations(), MIGRATIONS);
   });
 
   it('keeps UNIQUE (task_id, period_key), which is what makes ticking idempotent', async () => {
@@ -60,6 +63,27 @@ describe('migrations', { skip: SKIP_REASON }, () => {
     );
   });
 
+  it('leaves tasks with a distinct position per list, so reordering has room', async () => {
+    // 002 renumbers each list's tasks 1, 2, 3 … The invariant it establishes is
+    // what POST /api/tasks/:id/move bisects, so assert the invariant rather than
+    // the statement that produced it.
+    const { rows } = await h.sql.query<{ duplicates: number }>(
+      `SELECT count(*)::int AS duplicates FROM (
+         SELECT list_id, position FROM tasks GROUP BY list_id, position HAVING count(*) > 1
+       ) AS clashes`,
+    );
+    assert.equal(rows[0]!.duplicates, 0);
+
+    const indexes = await h.sql.query<{ indexname: string }>(
+      `SELECT indexname FROM pg_indexes WHERE schemaname = $1 AND tablename = 'tasks'`,
+      [h.schema],
+    );
+    assert.ok(
+      indexes.rows.some((row) => row.indexname === 'tasks_list_order_idx'),
+      'the index backing the task ordering is missing',
+    );
+  });
+
   it('applying a second time is a no-op and leaves data alone', async () => {
     const before = await h.sql.query('SELECT * FROM schema_migrations');
     await h.sql.query(
@@ -69,7 +93,7 @@ describe('migrations', { skip: SKIP_REASON }, () => {
     await h.migrate();
 
     const after = await h.sql.query('SELECT * FROM schema_migrations');
-    assert.deepEqual(await h.appliedMigrations(), ['001_init.sql']);
+    assert.deepEqual(await h.appliedMigrations(), MIGRATIONS);
     assert.equal(after.rowCount, before.rowCount);
 
     const users = await h.sql.query('SELECT firebase_uid FROM users');
@@ -84,6 +108,6 @@ describe('migrations', { skip: SKIP_REASON }, () => {
     // The advisory lock in migrate() is what makes this survive: the second and
     // third callers wait, then find nothing left to apply.
     await Promise.all([h.migrate(), h.migrate(), h.migrate()]);
-    assert.deepEqual(await h.appliedMigrations(), ['001_init.sql']);
+    assert.deepEqual(await h.appliedMigrations(), MIGRATIONS);
   });
 });
