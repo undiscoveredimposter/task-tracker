@@ -5,7 +5,7 @@ import express, { type Express } from 'express';
 import { requireAuth } from './auth.js';
 import { config } from './config.js';
 import { errorHandler } from './errors.js';
-import { subscriberCount } from './events.js';
+import { eventListenerState, subscriberCount } from './events.js';
 import { pool } from './db.js';
 import { writeLimiter } from './limits.js';
 import { inviteRouter, listInviteRouter } from './routes/invites.js';
@@ -30,7 +30,12 @@ export function createApp(): Express {
   app.get('/api/health', async (_req, res) => {
     try {
       await pool.query('SELECT 1');
-      res.json({ ok: true, streams: subscriberCount() });
+      // `live` is the LISTEN connection. Anything but `listening` means this
+      // instance is deaf to events raised on another one — still a working app
+      // for anybody connected here, but not a healthy member of a pair. Kept
+      // out of `ok` on purpose: taking the container out of rotation for it
+      // would make a database blip into an outage.
+      res.json({ ok: true, streams: subscriberCount(), live: eventListenerState() });
     } catch {
       res.status(503).json({ ok: false, error: 'database unavailable' });
     }

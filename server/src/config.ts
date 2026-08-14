@@ -1,5 +1,7 @@
 /** Environment, read once and validated loudly rather than failing at first use. */
 
+import { isValidChannelName } from './event-wire.js';
+
 function required(name: string): string {
   const value = process.env[name];
   if (!value) throw new Error(`Missing required environment variable ${name}`);
@@ -24,6 +26,22 @@ function positive(name: string, fallback: string): number {
   return value;
 }
 
+/**
+ * A Postgres channel name. `LISTEN` takes an identifier, which cannot be a bound
+ * parameter, so this is the one setting that ends up concatenated into SQL —
+ * checked here, at boot, rather than trusted at the point it is used.
+ */
+function channel(name: string, fallback: string): string {
+  const value = optional(name, fallback);
+  if (!isValidChannelName(value)) {
+    throw new Error(
+      `${name} must be a plain lower-case Postgres identifier (letters, digits and underscores, ` +
+        `not starting with a digit, at most 63 characters), got ${JSON.stringify(value)}`,
+    );
+  }
+  return value;
+}
+
 export const config = {
   port: Number(optional('PORT', '8080')),
   databaseUrl: required('DATABASE_URL'),
@@ -40,6 +58,14 @@ export const config = {
   },
   /** Default lifetime of an invite link. 0 means links never expire. */
   inviteDefaultDays: Number(optional('INVITE_DEFAULT_DAYS', '7')),
+
+  /**
+   * The Postgres channel instances fan live updates out over. Channels are
+   * per-database rather than per-schema, so two deployments sharing one database
+   * — or a test run alongside a dev server — need different names or they hear
+   * each other's events.
+   */
+  eventChannel: channel('TALLY_EVENT_CHANNEL', 'tally_events'),
 
   /** Request budgets, per minute. See rate-limit.ts and limits.ts. */
   rateLimit: {
