@@ -207,6 +207,21 @@ body {
     padding-top: env(safe-area-inset-top);
   }
 
+  /* The bar that opens a sheet stands exactly where the sheet rises from, and
+     its button is the twin of the primary one inside the sheet — same width,
+     same outline, near enough the same words. Left showing through the scrim
+     while the panel slides up over it, that twin reads as a second, ghostly
+     copy of the sheet being left behind, so it goes for as long as a sheet is
+     open. `dialog[open]` covers every sheet in the app at once, which is why
+     no screen has to remember to do this for itself. */
+  .bottom-bar {
+    transition: opacity 0.18s ease-out;
+  }
+
+  body:has(dialog[open]) .bottom-bar {
+    opacity: 0;
+  }
+
   /* The desktop sidebar's width, published to everything below it. A sheet is
      positioned against the window, so lining it up with the task column is only
      possible if it knows how much of the window the sidebar has taken. Zero

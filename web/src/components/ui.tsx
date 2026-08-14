@@ -352,11 +352,16 @@ export function ListSkeleton() {
   );
 }
 
-/** Fixed bar at the bottom of a screen, clear of the home indicator. */
+/**
+ * Fixed bar at the bottom of a screen, clear of the home indicator.
+ *
+ * It steps aside while a sheet is open — see `.bottom-bar` in index.css for
+ * why, and note that the rule is what makes it happen, not anything here.
+ */
 export function BottomBar({ children, className = '' }: { children: ReactNode; className?: string }) {
   return (
     <div
-      className={`safe-bottom pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-ground from-55% to-transparent px-4 pt-3 ${className}`}
+      className={`bottom-bar safe-bottom pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-ground from-55% to-transparent px-4 pt-3 ${className}`}
     >
       <div className="pointer-events-auto">{children}</div>
     </div>
