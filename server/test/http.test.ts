@@ -1,5 +1,5 @@
 // Registers the hooks that let `../src/*.ts` resolve its `./x.js` specifiers.
-import './helpers/ts-resolve.ts';
+import '../scripts/ts-resolve.ts';
 
 import assert from 'node:assert/strict';
 import type { Request } from 'express';
