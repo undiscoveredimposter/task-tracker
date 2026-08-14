@@ -3,7 +3,11 @@ import { after, before, describe, it } from 'node:test';
 import { SKIP_REASON, startHarness, type Harness } from './helpers/harness.ts';
 
 /** Every migration that has shipped, in the order migrate() applies them. */
-const MIGRATIONS = ['001_init.sql', '002_task_positions.sql'];
+const MIGRATIONS = [
+  '001_init.sql',
+  '002_task_positions.sql',
+  '003_user_display_name_custom.sql',
+];
 
 /**
  * Migrations run on container boot, before the port opens. Two things have to
@@ -82,6 +86,29 @@ describe('migrations', { skip: SKIP_REASON }, () => {
       indexes.rows.some((row) => row.indexname === 'tasks_list_order_idx'),
       'the index backing the task ordering is missing',
     );
+  });
+
+  it('gives every existing user a display_name_custom of false', async () => {
+    // 003 adds the flag that stops requireAuth overwriting a name someone chose.
+    // It has to default false, or every account that has never opened the
+    // settings screen would freeze on whatever the provider last said.
+    const { rows } = await h.sql.query<{ is_nullable: string; column_default: string | null }>(
+      `SELECT is_nullable, column_default FROM information_schema.columns
+        WHERE table_schema = $1 AND table_name = 'users' AND column_name = 'display_name_custom'`,
+      [h.schema],
+    );
+    assert.equal(rows.length, 1, 'display_name_custom is missing from users');
+    assert.equal(rows[0]!.is_nullable, 'NO');
+    assert.equal(rows[0]!.column_default, 'false');
+
+    await h.sql.query(
+      `INSERT INTO users (firebase_uid, email, display_name) VALUES ('backfilled', 'b@c.test', 'Backfilled')`,
+    );
+    const flags = await h.sql.query<{ display_name_custom: boolean }>(
+      `SELECT display_name_custom FROM users WHERE firebase_uid = 'backfilled'`,
+    );
+    assert.equal(flags.rows[0]!.display_name_custom, false);
+    await h.sql.query(`DELETE FROM users WHERE firebase_uid = 'backfilled'`);
   });
 
   it('applying a second time is a no-op and leaves data alone', async () => {

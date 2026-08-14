@@ -62,3 +62,28 @@ export async function verifyIdToken(idToken: string): Promise<VerifiedToken> {
     picture: (decoded.picture as string | undefined) ?? null,
   };
 }
+
+/**
+ * Removes the Firebase identity behind a profile the person has just deleted,
+ * so signing back in creates a fresh account rather than resurrecting the old
+ * identity against a row that no longer exists.
+ *
+ * Best effort, and deliberately so: the database row is already gone by the time
+ * this runs, and failing the request would tell somebody their account was still
+ * there when it isn't. Returns whether it worked, for the caller's log line —
+ * never the uid, which has no business in a log next to the word "deleted".
+ */
+export async function deleteAuthUser(uid: string): Promise<boolean> {
+  // Dev auth invents identities locally; there is no Firebase project behind
+  // them, and calling one would only ever be an error to swallow.
+  if (devAuthEnabled) return false;
+
+  try {
+    ensureApp();
+    await getAuth().deleteUser(uid);
+    return true;
+  } catch (error) {
+    console.warn('[auth] could not delete the Firebase user behind a deleted profile', error);
+    return false;
+  }
+}
