@@ -1,6 +1,7 @@
 // Must come first: it registers the module-resolution hooks that let the
-// dynamic imports below reach `src/*.ts` and `@tally/shared`.
-import './ts-resolve.ts';
+// dynamic imports below reach `src/*.ts` and `@tally/shared`. The dev server
+// loads the same module, so the suite and `npm run dev` resolve identically.
+import '../../src/dev-resolve.ts';
 
 import { randomBytes } from 'node:crypto';
 import { once } from 'node:events';
