@@ -92,8 +92,11 @@ export function SignIn({ intro }: { intro?: string }) {
           <span className="h-px flex-1 bg-divider" />
         </div>
 
+        {/* Labelled as well as prompted: a placeholder is the only name these
+            two fields have, and it leaves the moment anyone types into them. */}
         <input
           type="email"
+          aria-label="Email address"
           autoComplete="email"
           required
           placeholder="you@example.com"
@@ -105,6 +108,7 @@ export function SignIn({ intro }: { intro?: string }) {
         {mode === 'password' && (
           <input
             type="password"
+            aria-label="Password"
             autoComplete={creating ? 'new-password' : 'current-password'}
             required
             placeholder="Password"

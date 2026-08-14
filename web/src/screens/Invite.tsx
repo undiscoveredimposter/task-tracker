@@ -93,11 +93,11 @@ export function Invite() {
             <span className="mb-4 flex size-16 items-center justify-center rounded-full bg-tint text-2xl font-semibold text-accent-ink">
               <Avatar user={{ displayName: preview.inviterName ?? '?', photoUrl: null }} size={64} />
             </span>
-            <div className="text-[22px] leading-tight font-semibold tracking-tight">
+            <h1 className="text-[22px] leading-tight font-semibold tracking-tight">
               {preview.inviterName} invited you to
               <br />
               {preview.list.emoji} {preview.list.name}
-            </div>
+            </h1>
             <p className="mt-3 text-sm text-muted">
               {preview.list.taskCount} task{preview.list.taskCount === 1 ? '' : 's'} ·{' '}
               {preview.list.memberCount} member{preview.list.memberCount === 1 ? '' : 's'} ·{' '}
@@ -113,9 +113,9 @@ export function Invite() {
         {preview.status === 'already_member' && (
           <>
             {TICK}
-            <div className="mt-4 text-xl font-semibold">
+            <h1 className="mt-4 text-xl font-semibold">
               You&apos;re already in {preview.list?.name ?? 'this list'}
-            </div>
+            </h1>
             <p className="mt-2.5 text-sm text-muted">Nothing to join — you&apos;re all set.</p>
           </>
         )}
@@ -123,7 +123,7 @@ export function Invite() {
         {preview.status === 'expired' && (
           <>
             {CLOCK}
-            <div className="mt-4 text-xl font-semibold">This invite has expired</div>
+            <h1 className="mt-4 text-xl font-semibold">This invite has expired</h1>
             <p className="mt-2.5 text-sm leading-relaxed text-muted text-pretty">
               Invite links last 7 days by default. Ask {preview.inviterName ?? 'the owner'} to send a fresh one.
             </p>
@@ -133,7 +133,7 @@ export function Invite() {
         {preview.status === 'revoked' && (
           <>
             {BLOCKED}
-            <div className="mt-4 text-xl font-semibold">This invite was turned off</div>
+            <h1 className="mt-4 text-xl font-semibold">This invite was turned off</h1>
             <p className="mt-2.5 text-sm leading-relaxed text-muted text-pretty">
               The link was revoked by the list owner. Ask {preview.inviterName ?? 'them'} for a new one if
               this seems wrong.
@@ -144,7 +144,7 @@ export function Invite() {
         {preview.status === 'used_up' && (
           <>
             {BLOCKED}
-            <div className="mt-4 text-xl font-semibold">This invite has been used</div>
+            <h1 className="mt-4 text-xl font-semibold">This invite has been used</h1>
             <p className="mt-2.5 text-sm leading-relaxed text-muted text-pretty">
               It was set to work a limited number of times. Ask for another link.
             </p>
@@ -154,7 +154,7 @@ export function Invite() {
         {preview.status === 'not_found' && (
           <>
             {BLOCKED}
-            <div className="mt-4 text-xl font-semibold">We don&apos;t recognise that link</div>
+            <h1 className="mt-4 text-xl font-semibold">We don&apos;t recognise that link</h1>
             <p className="mt-2.5 text-sm leading-relaxed text-muted text-pretty">
               Check you copied all of it — invite links are long and easy to cut short.
             </p>

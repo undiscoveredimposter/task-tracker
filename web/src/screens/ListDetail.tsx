@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { roleAtLeast, type Task } from '@tally/shared';
 import { api } from '../lib/api';
+import { undoAnnouncement } from '../lib/a11y';
 import { useAuth } from '../lib/auth';
 import { useData } from '../lib/store';
 import { resetsInLabel } from '../lib/format';
@@ -162,6 +163,7 @@ export function ListDetail() {
         </div>
       </div>
 
+      {/* Carries its own live region, so the lists home is announced too. */}
       <OfflineBanner online={online} pending={pending} savedAt={savedAt} />
 
       {list.tasks.length === 0 ? (
@@ -192,16 +194,24 @@ export function ListDetail() {
         </div>
       )}
 
+      {/* Mounted always and empty until there is something to say, for the
+          reason spelled out on OfflineBanner. The toast leaves on a timer
+          nobody watching it can see, so the spoken version says how long the
+          undo will be there. */}
+      <p role="status" className="sr-only">
+        {justDone ? undoAnnouncement(justDone.title, UNDO_SECONDS) : ''}
+      </p>
+
       {justDone && (
-        <div
-          role="status"
-          className="anim-toast absolute inset-x-4 bottom-28 z-20 flex min-h-13 items-center gap-2.5 rounded-2xl bg-toast py-2 pr-2 pl-4 text-toast-ink shadow-[0_8px_24px_rgba(0,0,0,.35)] md:bottom-6"
-        >
-          <CheckIcon />
-          <span className="flex-1 truncate text-sm font-medium">{justDone.title} — done</span>
+        <div className="anim-toast absolute inset-x-4 bottom-28 z-20 flex min-h-13 items-center gap-2.5 rounded-2xl bg-toast py-2 pr-2 pl-4 text-toast-ink shadow-[0_8px_24px_rgba(0,0,0,.35)] md:bottom-6">
+          <span aria-hidden="true" className="flex flex-1 items-center gap-2.5 truncate">
+            <CheckIcon />
+            <span className="flex-1 truncate text-sm font-medium">{justDone.title} — done</span>
+          </span>
           <button
             type="button"
             onClick={undo}
+            aria-label={`Undo ${justDone.title}`}
             className="min-h-10 shrink-0 rounded-xl bg-toast-btn px-4 text-sm font-semibold text-toast-ink"
           >
             Undo
