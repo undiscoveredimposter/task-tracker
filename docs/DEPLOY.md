@@ -166,6 +166,9 @@ not.
 | `INVITE_DEFAULT_DAYS` | `7` | optional; `0` means links never expire |
 | `RATE_LIMIT_INVITE_LOOKUPS_PER_MINUTE` | `20` | optional; unauthenticated invite-link lookups, per client address |
 | `RATE_LIMIT_WRITES_PER_MINUTE` | `240` | optional; authenticated writes, per signed-in person |
+| `TALLY_EVENT_CHANNEL` | `tally_events` | optional; Postgres channel live updates fan out over. Per-database, so two deployments sharing one database need different names. Validated at boot |
+| `CSP_REPORT_ONLY` | unset | optional; sends the CSP as report-only. No report endpoint is configured, so violations reach only the browser console — quiet logs prove nothing. For a deploy, not a resting state |
+| `LOG_FORMAT` | `json` in production | optional; `json` or `text`. Tokens and Firebase `apiKey`/`oobCode` params are redacted either way |
 
 Both rate limits must be **above zero**. The server refuses to start on a `0` or
 a typo rather than booting into a wall of 429s nobody can explain, so a bad
