@@ -1,7 +1,8 @@
+import { readFileSync } from 'node:fs';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
-import { OfflineBanner } from './ui';
+import { BottomBar, OfflineBanner } from './ui';
 
 /**
  * `OfflineBanner` holds the only live region on the lists home, and the wording
@@ -67,5 +68,24 @@ describe('OfflineBanner', () => {
     // "Syncing 2 ticks…" beside a crossed-out signal says the opposite of itself.
     expect(render({ online: true, pending: 2, savedAt: null })).not.toContain('<svg');
     expect(render({ online: false, pending: 2, savedAt: null })).toContain('<svg');
+  });
+});
+
+/**
+ * The bar and the rule that hides it live in different files and neither is any
+ * use without the other. Drop the class and the bar comes back as a ghost of the
+ * sheet sliding up over it; drop the rule and nothing on screen says so either.
+ */
+describe('BottomBar while a sheet is open', () => {
+  const css = readFileSync(new URL('../index.css', import.meta.url), 'utf8');
+
+  it('carries the class the rule is written against', () => {
+    expect(renderToStaticMarkup(createElement(BottomBar, { children: null }))).toContain(
+      'bottom-bar',
+    );
+  });
+
+  it('is taken off screen for as long as any sheet is open', () => {
+    expect(css).toMatch(/body:has\(dialog\[open\]\)\s+\.bottom-bar\s*\{[^}]*opacity:\s*0/);
   });
 });
