@@ -14,7 +14,7 @@ const CHOICES: [ThemeChoice, string][] = [
  * index.html on launch, `watchSystemTheme` while the app is open. This only
  * records the decision, so there is no effect here to fight with either of them.
  */
-export function ThemeToggle({ className = '' }: { className?: string }) {
+export function ThemeToggle() {
   const [choice, setChoice] = useState<ThemeChoice>(() => readThemeChoice(window.localStorage));
 
   const pick = (next: ThemeChoice) => {
@@ -24,7 +24,7 @@ export function ThemeToggle({ className = '' }: { className?: string }) {
   };
 
   return (
-    <div className={`flex flex-col gap-2 ${className}`}>
+    <div className="flex flex-col gap-2">
       <span id="appearance-label" className="text-xs font-medium text-muted">
         Appearance
       </span>
