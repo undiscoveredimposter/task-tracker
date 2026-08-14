@@ -12,6 +12,7 @@ import { requestLogger } from './request-log.js';
 import { inlineScriptHashes, securityHeaders } from './security-headers.js';
 import { inviteRouter, listInviteRouter } from './routes/invites.js';
 import { listsRouter } from './routes/lists.js';
+import { meRouter } from './routes/me.js';
 import { membersRouter } from './routes/members.js';
 import { streamRouter } from './routes/stream.js';
 import { tasksRouter } from './routes/tasks.js';
@@ -71,15 +72,9 @@ export function createApp(): Express {
     }
   });
 
-  app.get('/api/me', requireAuth, (req, res) => {
-    const user = req.user!;
-    res.json({
-      id: user.id,
-      displayName: user.displayName,
-      email: user.email,
-      photoUrl: user.photoUrl,
-    });
-  });
+  // Your own profile: read it, rename yourself, delete yourself. Behind the
+  // same `writeLimiter` as every other authenticated write — it skips the GET.
+  app.use('/api/me', requireAuth, writeLimiter, meRouter);
 
   // The invite preview is deliberately outside requireAuth — someone opening a
   // link before signing in still needs to see what they've been invited to.

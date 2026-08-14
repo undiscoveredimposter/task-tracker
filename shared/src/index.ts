@@ -129,6 +129,15 @@ export type ServerEvent =
 
 /* ── Request payloads ────────────────────────────────────────────────────── */
 
+/**
+ * Renaming yourself. The name is trimmed and capped server-side; nothing else
+ * about a profile is editable, so this is the whole body.
+ */
+export interface UpdateMeBody {
+  /** The short name other people see on your avatar and in a members list. */
+  displayName: string;
+}
+
 export interface CreateListBody extends Partial<ListSchedule> {
   name: string;
   emoji?: string;

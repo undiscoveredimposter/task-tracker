@@ -2,6 +2,7 @@ import type { NextFunction, Request, Response } from 'express';
 import { queryOne } from './db.js';
 import { verifyIdToken } from './firebase.js';
 import { HttpError } from './errors.js';
+import { providerDisplayName } from './profile.js';
 
 export interface AuthedUser {
   id: string;
@@ -28,13 +29,6 @@ function bearer(req: Request): string | null {
   return token;
 }
 
-/** A sensible display name when the identity provider gives us nothing better. */
-function nameFrom(name: string | null, email: string | null): string {
-  if (name && name.trim()) return name.trim();
-  if (email) return email.split('@')[0] ?? 'Someone';
-  return 'Someone';
-}
-
 /**
  * Verifies the Firebase ID token and reflects the identity into `users`. There
  * is no separate registration step — first authenticated request creates the row.
@@ -51,7 +45,7 @@ export async function requireAuth(req: Request, _res: Response, next: NextFuncti
       throw new HttpError(401, 'Your session has expired — sign in again');
     }
 
-    const displayName = nameFrom(verified.name, verified.email);
+    const displayName = providerDisplayName(verified.name, verified.email);
     const user = await queryOne<{
       id: string;
       firebase_uid: string;
@@ -64,8 +58,14 @@ export async function requireAuth(req: Request, _res: Response, next: NextFuncti
        ON CONFLICT (firebase_uid) DO UPDATE
          SET email        = EXCLUDED.email,
              photo_url    = EXCLUDED.photo_url,
-             -- Keep whatever name we already have if the provider stops sending one.
-             display_name = COALESCE(NULLIF(EXCLUDED.display_name, ''), users.display_name),
+             -- This runs on every authenticated request, so it is the thing most
+             -- likely to undo a rename. A name someone chose for themselves wins
+             -- outright; otherwise take the provider's, keeping what we already
+             -- have if the provider has stopped sending one.
+             display_name = CASE
+                              WHEN users.display_name_custom THEN users.display_name
+                              ELSE COALESCE(NULLIF(EXCLUDED.display_name, ''), users.display_name)
+                            END,
              last_seen_at = now()
        RETURNING id, firebase_uid, email, display_name, photo_url`,
       [verified.uid, verified.email?.toLowerCase() ?? null, displayName, verified.picture],
