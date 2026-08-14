@@ -41,12 +41,45 @@ services:
       # Public origin, used to build invite links. No trailing slash.
       APP_ORIGIN: ${APP_ORIGIN:?set APP_ORIGIN to the app's public https origin}
 
+      # ---------------------------------------------------------------------
+      # HSTS: check your domain before the first production deploy.
+      #
+      # There is no switch for this. NODE_ENV=production above means every
+      # response that arrives over TLS carries
+      #
+      #   Strict-Transport-Security: max-age=63072000; includeSubDomains
+      #
+      # `includeSubDomains` covers the WHOLE domain, not just the host Tally
+      # runs on, and two years is how long a browser remembers it. Deploy Tally
+      # at an apex — example.com — and every browser that loads it is forced
+      # onto https for every subdomain of example.com for two years: intranets,
+      # a legacy http-only box, a router admin page, anything. Backing it out
+      # means serving a max-age=0 from each affected host and waiting for every
+      # device to come back; you cannot recall it centrally.
+      #
+      # Deploy at a subdomain — tally.example.com — and the blast radius is that
+      # subdomain and anything under it, which is the intended case.
+      #
+      # `preload` is deliberately NOT sent; that one really is irreversible on a
+      # useful timescale. See server/src/security-headers.ts.
+      # ---------------------------------------------------------------------
+
       # Firebase Admin service account. FIREBASE_PRIVATE_KEY may contain literal
       # \n escapes — config.ts unescapes them. This key is server-side only and
       # must never be exposed to the web build.
       FIREBASE_PROJECT_ID: ${FIREBASE_PROJECT_ID}
       FIREBASE_CLIENT_EMAIL: ${FIREBASE_CLIENT_EMAIL}
       FIREBASE_PRIVATE_KEY: ${FIREBASE_PRIVATE_KEY}
+
+      # Only if you use a CUSTOM Firebase Auth domain. Leave unset otherwise and
+      # the server derives <FIREBASE_PROJECT_ID>.firebaseapp.com.
+      #
+      # This is the domain the Content-Security-Policy allows as a frame source,
+      # and Firebase serves its sign-in iframe from it. If you set a custom
+      # domain it MUST match the VITE_FIREBASE_AUTH_DOMAIN the bundle was built
+      # with above — a mismatch blocks the iframe and Google sign-in fails while
+      # every other part of the app keeps working.
+      FIREBASE_AUTH_DOMAIN: ${FIREBASE_AUTH_DOMAIN:-}
 
       INVITE_DEFAULT_DAYS: ${INVITE_DEFAULT_DAYS:-7}
 
@@ -60,6 +93,26 @@ services:
       # gets a budget each.
       RATE_LIMIT_INVITE_LOOKUPS_PER_MINUTE: ${RATE_LIMIT_INVITE_LOOKUPS_PER_MINUTE:-20}
       RATE_LIMIT_WRITES_PER_MINUTE: ${RATE_LIMIT_WRITES_PER_MINUTE:-240}
+
+      # Send the Content-Security-Policy as Content-Security-Policy-Report-Only,
+      # so a policy that would break sign-in reports instead of breaking it. Use
+      # it for one deploy when the policy changes, then turn it back off.
+      #
+      # READ THIS BEFORE TRUSTING IT. There is no report-uri and no report-to, so
+      # violations are printed to the console of the browser that hit them and go
+      # nowhere else. Nothing arrives here, nothing reaches these container logs.
+      # A quiet week of logs is NOT evidence the policy is clean — it is only
+      # evidence nobody looked. Verifying means opening devtools yourself and
+      # signing in for real on all three methods (Google popup, Google redirect,
+      # email link). Left on permanently the policy is both unenforced and
+      # unobserved, which is strictly worse than either.
+      CSP_REPORT_ONLY: ${CSP_REPORT_ONLY:-0}
+
+      # 'json' (default when NODE_ENV=production) or 'text'. One line per request
+      # with method, path, status, duration and user id. Authorization headers,
+      # ID tokens and invite tokens are never logged: the invite path is recorded
+      # as /api/invites/token/:token, with the token itself dropped.
+      LOG_FORMAT: ${LOG_FORMAT:-json}
 
     # Coolify's proxy terminates TLS and routes to this port; the container is
     # not published on the host directly.

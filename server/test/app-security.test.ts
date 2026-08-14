@@ -40,6 +40,10 @@ process.env.WEB_ROOT = webRoot;
 process.env.FIREBASE_PROJECT_ID = 'tally-demo';
 process.env.FIREBASE_AUTH_DOMAIN = '';
 process.env.APP_ORIGIN = 'http://tally.test';
+// Small enough to trip deliberately in one test. The limiter itself is covered
+// in rate-limit.test.ts; here it is only a way to produce a 429 from the wired
+// app, which is a response nothing else in this file can reach.
+process.env.RATE_LIMIT_INVITE_LOOKUPS_PER_MINUTE = '2';
 
 describe('security headers on the wired app', () => {
   let server: Server;
@@ -169,5 +173,64 @@ describe('security headers on the wired app', () => {
     assert.ok(!written.includes(token), 'an invite token was written to the log');
     assert.ok(!/bearer /i.test(written), 'a credential header reached the log');
     assert.ok(written.includes('/j/:token'), 'the invite path was not redacted, it was dropped');
+  });
+
+  /**
+   * The one thing this branch could only get wrong after the rebase onto #28.
+   *
+   * A 429 is written by the rate limiter itself — it answers inline rather than
+   * calling `next(err)`, so it reaches neither the routes nor the error handler.
+   * Anything mounted *after* the limiter therefore never runs for a refused
+   * request. That makes it the sharpest available check that `requestLogger` and
+   * `securityHeaders` really are outermost in the merged `createApp`, and not
+   * merely present somewhere in the stack.
+   *
+   * Runs last on purpose: it spends the invite bucket and does not put it back.
+   */
+  it('still logs and still sends headers when the rate limiter refuses a request', async () => {
+    const { inviteLookupLimiter } = await import('../src/limits.ts');
+    inviteLookupLimiter.counter.reset();
+
+    const token = 'RUW1TX9ip_lFcbAzQ0k7Yg';
+
+    const captured: string[] = [];
+    const realStdout = process.stdout.write.bind(process.stdout);
+    process.stdout.write = ((chunk: unknown, ...rest: unknown[]) => {
+      captured.push(String(chunk));
+      const callback = rest.find((argument) => typeof argument === 'function');
+      if (typeof callback === 'function') (callback as () => void)();
+      return true;
+    }) as typeof process.stdout.write;
+
+    let refused: { status: number; headers: Headers; body: string };
+    try {
+      // The limit is 2, so the third lookup from this address is refused. The
+      // first two reach for the database and fail; only the third is asserted on.
+      await get(`/api/invites/token/${token}`);
+      await get(`/api/invites/token/${token}`);
+      refused = await get(`/api/invites/token/${token}`);
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    } finally {
+      process.stdout.write = realStdout;
+    }
+
+    assert.equal(refused.status, 429, 'the limiter did not refuse a third lookup');
+    assert.equal(JSON.parse(refused.body).code, 'rate_limited');
+    assert.equal(refused.headers.get('retry-after'), '60');
+
+    // securityHeaders is upstream of the limiter, so a refusal is as protected as
+    // a 200. Without that ordering a 429 would ship with no CSP at all.
+    assertBaseline(refused.headers, 'rate-limited 429');
+    assert.match(refused.headers.get('content-security-policy') ?? '', /default-src 'none'/);
+
+    // requestLogger is upstream of both, so the refusal is on the record — and
+    // the token that was being guessed is still not.
+    const written = captured.join('');
+    assert.ok(!written.includes(token), 'an invite token was written to the log');
+    const refusals = written
+      .split('\n')
+      .filter((line) => line.includes('429') && line.includes('/api/invites/token/:token'));
+    assert.equal(refusals.length, 1, `expected exactly one 429 line, got: ${written}`);
+    assert.match(refusals[0]!, /\bwarn\b/, 'a 429 should be logged at warn, not info');
   });
 });

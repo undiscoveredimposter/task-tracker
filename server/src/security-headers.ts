@@ -39,9 +39,21 @@ export interface SecurityPolicyOptions {
   upgradeInsecureRequests?: boolean;
 }
 
-/** Two years, the value HSTS preload lists expect. `preload` itself is deliberately
- * not sent: it is close to irreversible and should be an explicit decision, not a
- * side effect of deploying. */
+/**
+ * Two years, the value HSTS preload lists expect.
+ *
+ * `preload` itself is deliberately not sent: it is close to irreversible and
+ * should be an explicit decision, not a side effect of deploying.
+ *
+ * `includeSubDomains` is still wide, and worth being honest about. It applies to
+ * the entire domain the response came from, so deploying at an apex forces https
+ * on every sibling subdomain for two years — see the HSTS block in
+ * docker-compose.yml, which is where an operator picks the domain. Deploying at
+ * a subdomain keeps it to that subtree, which is what this is tuned for.
+ *
+ * Sent only on requests that actually arrived over TLS (see below), so a local
+ * http run can never poison a developer's browser.
+ */
 const HSTS = 'max-age=63072000; includeSubDomains';
 
 const PERMISSIONS_POLICY = [
