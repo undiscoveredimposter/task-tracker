@@ -1,5 +1,7 @@
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import type { Task } from '@tally/shared';
+import * as a11y from './a11y';
 import { holdFocus, taskRowLabel, undoAnnouncement } from './a11y';
 
 const SAM = { id: 'u-sam', displayName: 'Sam', email: null, photoUrl: null };
@@ -75,8 +77,24 @@ describe('undoAnnouncement', () => {
   });
 });
 
-/* What the network is doing is announced from `offlineLabel` in format.ts, and
-   covered by its tests there — the banner speaks and shows the same sentence. */
+describe('the network wording', () => {
+  /* `ui.test.ts` holds the banner's two halves to the same sentence. This holds
+     the sentence to one home: a rival wording here is how they came apart last
+     time, and it is invisible until someone hears the wrong thing. */
+  const source = readFileSync(new URL('./a11y.ts', import.meta.url), 'utf8');
+
+  it('stays in format.ts rather than growing a second copy here', () => {
+    expect(source).not.toMatch(/Offline|waiting to sync|still to sync/);
+  });
+
+  it('is not reintroduced under another name', () => {
+    expect(Object.keys(a11y).sort()).toStrictEqual([
+      'holdFocus',
+      'taskRowLabel',
+      'undoAnnouncement',
+    ]);
+  });
+});
 
 describe('holdFocus', () => {
   const target = (isConnected = true) => {
