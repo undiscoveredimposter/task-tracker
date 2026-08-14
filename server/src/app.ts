@@ -1,17 +1,32 @@
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import cors from 'cors';
 import express, { type Express } from 'express';
 import { requireAuth } from './auth.js';
-import { config } from './config.js';
+import { config, isProduction } from './config.js';
 import { errorHandler } from './errors.js';
 import { subscriberCount } from './events.js';
 import { pool } from './db.js';
 import { writeLimiter } from './limits.js';
+import { requestLogger } from './request-log.js';
+import { inlineScriptHashes, securityHeaders } from './security-headers.js';
 import { inviteRouter, listInviteRouter } from './routes/invites.js';
 import { listsRouter } from './routes/lists.js';
 import { membersRouter } from './routes/members.js';
 import { streamRouter } from './routes/stream.js';
 import { tasksRouter } from './routes/tasks.js';
+
+/**
+ * CSP hashes for the inline `<script>` blocks in the shell we are actually
+ * serving. Read once at startup from the built file rather than kept as a
+ * constant, so the frontend can change its pre-paint theme script without a
+ * matching edit here — and without a blank screen if nobody makes one.
+ */
+function shellScriptHashes(webRoot: string): string[] {
+  const indexHtml = join(webRoot, 'index.html');
+  if (!existsSync(indexHtml)) return [];
+  return inlineScriptHashes(readFileSync(indexHtml, 'utf8'));
+}
 
 export function createApp(): Express {
   const app = express();
@@ -20,6 +35,22 @@ export function createApp(): Express {
   // req.protocol and rate-limiting see the real client.
   app.set('trust proxy', 1);
   app.disable('x-powered-by');
+
+  // Outermost, so a request is timed end to end and a response that never
+  // reaches a route still leaves a line.
+  app.use(requestLogger({ format: config.logFormat }));
+
+  app.use(
+    securityHeaders({
+      authDomains: config.firebase.authDomains,
+      scriptHashes: config.webRoot ? shellScriptHashes(config.webRoot) : [],
+      reportOnly: config.cspReportOnly,
+      // Only meaningful once TLS is terminated in front of us, and only sent on
+      // requests that actually arrived over https — see security-headers.ts.
+      hsts: isProduction,
+      upgradeInsecureRequests: isProduction,
+    }),
+  );
 
   app.use(cors({ origin: true, credentials: false }));
   app.use(express.json({ limit: '64kb' }));
