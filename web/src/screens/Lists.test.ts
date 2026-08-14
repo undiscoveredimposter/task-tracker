@@ -6,16 +6,19 @@ import { compile } from 'tailwindcss';
 import { describe, expect, it } from 'vitest';
 
 /**
- * The account button in the lists-home header is the sign-out control, and it
- * used to be exactly the size of the 36px avatar inside it — the one control on
- * the screen under the brief's 44px floor, sitting in the corner where a thumb
- * is least accurate.
+ * The way into the account screen, on both layouts.
+ *
+ * On a phone it is the avatar in the lists-home header, which used to be
+ * exactly the size of the 36px avatar inside it — the one control on the screen
+ * under the brief's 44px floor, sitting in the corner where a thumb is least
+ * accurate. On a desktop the lists home does not exist at all, so the same way
+ * in is in the top bar and owes the same floor.
  *
  * There is no browser here, so this cannot lay the header out. What it can do
  * is refuse to take Tailwind's spacing scale on trust: the classes are read off
  * the JSX, compiled by the real compiler against the real index.css, and the
  * box resolved from the declarations that come back. Changing --spacing, or
- * dropping the class from the button, fails this with actual numbers.
+ * dropping the class from the control, fails this with actual numbers.
  */
 
 /** The design brief's floor for anything you can tap. */
@@ -112,23 +115,23 @@ function avatarDefaultSize(): number {
   return Number(declared?.[1]);
 }
 
-describe('the account button on the lists home', () => {
-  const classes = classesFor(source('./Lists.tsx'), 'Account and sign out');
+describe('the account link on the lists home', () => {
+  const classes = classesFor(source('./Lists.tsx'), 'Your account');
 
   it('is at least 44px on both axes', async () => {
     const box = await geometry(classes);
 
-    expect(box.get('width'), 'the button sets no width of its own').toBeGreaterThanOrEqual(
+    expect(box.get('width'), 'the link sets no width of its own').toBeGreaterThanOrEqual(
       MIN_TAP_PX,
     );
-    expect(box.get('height'), 'the button sets no height of its own').toBeGreaterThanOrEqual(
+    expect(box.get('height'), 'the link sets no height of its own').toBeGreaterThanOrEqual(
       MIN_TAP_PX,
     );
   });
 
   it('grows outwards only, so the header keeps its height and the avatar its place', async () => {
     // The hit area is bled back out with a negative margin. When that bleed
-    // cancels the growth exactly, the button's margin box is still the avatar's
+    // cancels the growth exactly, the link's margin box is still the avatar's
     // old 36px box — which is what keeps the header from shifting.
     const box = await geometry(classes);
     const bleed = box.get('margin') ?? 0;
@@ -139,9 +142,26 @@ describe('the account button on the lists home', () => {
   });
 
   it('still draws the avatar at 36, centred in the target', () => {
-    // Without centring, a bigger button would move the avatar rather than just
+    // Without centring, a bigger link would move the avatar rather than just
     // grow around it, and the assertion above would be measuring the wrong box.
     expect(avatarDefaultSize()).toBe(36);
+    expect(classes).toEqual(expect.arrayContaining(['flex', 'items-center', 'justify-center']));
+  });
+});
+
+describe('the account link in the desktop top bar', () => {
+  const classes = classesFor(source('../components/DesktopChrome.tsx'), 'Your account');
+
+  it('is at least 44px on both axes', async () => {
+    // A pointer is more accurate than a thumb, but this is the only way to the
+    // account screen above `md:` and the floor is not a phone-only rule.
+    const box = await geometry(classes);
+
+    expect(box.get('width')).toBeGreaterThanOrEqual(MIN_TAP_PX);
+    expect(box.get('height')).toBeGreaterThanOrEqual(MIN_TAP_PX);
+  });
+
+  it('centres whatever avatar it draws', () => {
     expect(classes).toEqual(expect.arrayContaining(['flex', 'items-center', 'justify-center']));
   });
 });

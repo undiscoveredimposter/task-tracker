@@ -1,9 +1,10 @@
 import { useState } from 'react';
-import { NavLink, useLocation } from 'react-router-dom';
+import { Link, NavLink, useLocation } from 'react-router-dom';
+import { useAuth } from '../lib/auth';
 import { useData } from '../lib/store';
 import { listSummaryLine } from '../lib/format';
 import { NewListSheet } from './NewListSheet';
-import { AvatarStack, PlusIcon, Skeleton, TallyMark } from './ui';
+import { Avatar, AvatarStack, PlusIcon, Skeleton, TallyMark } from './ui';
 
 /**
  * The chrome that only exists from `md:` up.
@@ -22,6 +23,7 @@ function useOpenListId(): string | null {
 }
 
 export function DesktopTopBar() {
+  const { me } = useAuth();
   const { lists } = useData();
   const openId = useOpenListId();
   const open = lists.find((list) => list.id === openId);
@@ -31,14 +33,27 @@ export function DesktopTopBar() {
       <div className="flex h-14 items-center gap-2.5 px-5">
         <TallyMark size={22} />
         <span className="text-[15px] font-semibold tracking-tight">Tally</span>
-        {open && (
-          <div className="ml-auto flex items-center gap-2.5">
-            <span className="text-[13px] text-muted">
-              {open.members.length === 1 ? 'Just you' : `${open.members.length} people`}
-            </span>
-            <AvatarStack users={open.members} size={26} />
-          </div>
-        )}
+        <div className="ml-auto flex items-center gap-2.5">
+          {open && (
+            <>
+              <span className="text-[13px] text-muted">
+                {open.members.length === 1 ? 'Just you' : `${open.members.length} people`}
+              </span>
+              <AvatarStack users={open.members} size={26} />
+            </>
+          )}
+          {/* A phone reaches the account screen through the avatar on the lists
+              home, which a desktop never shows — the sidebar has taken that
+              screen's place. This is the same way in, at the same size. */}
+          <Link
+            to="/settings"
+            title={me?.email ?? undefined}
+            aria-label="Your account"
+            className="-mr-2 flex size-11 items-center justify-center"
+          >
+            {me && <Avatar user={me} size={28} />}
+          </Link>
+        </div>
       </div>
     </header>
   );

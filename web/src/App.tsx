@@ -9,6 +9,7 @@ import { Invite } from './screens/Invite';
 import { ListDetail } from './screens/ListDetail';
 import { ListSettings } from './screens/ListSettings';
 import { Lists } from './screens/Lists';
+import { Settings } from './screens/Settings';
 import { Share } from './screens/Share';
 import { SignIn } from './screens/SignIn';
 import { Stats } from './screens/Stats';
@@ -75,6 +76,14 @@ function Shell() {
                 element={
                   <Protected>
                     <Lists />
+                  </Protected>
+                }
+              />
+              <Route
+                path="/settings"
+                element={
+                  <Protected>
+                    <Settings />
                   </Protected>
                 }
               />

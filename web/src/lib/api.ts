@@ -11,6 +11,7 @@ import type {
   Role,
   Stats,
   UpdateListBody,
+  UpdateMeBody,
   UpdateTaskBody,
 } from '@tally/shared';
 
@@ -76,6 +77,9 @@ const json = (body: unknown): RequestInit => ({ body: JSON.stringify(body) });
 
 export const api = {
   me: () => request<Me>('/me'),
+  // No id in either path: the only account anyone may touch is their own.
+  updateMe: (body: UpdateMeBody) => request<Me>('/me', { method: 'PATCH', ...json(body) }),
+  deleteMe: () => request<void>('/me', { method: 'DELETE' }),
 
   lists: () => request<ListSummary[]>('/lists'),
   list: (id: string) => request<ListDetail>(`/lists/${id}`),

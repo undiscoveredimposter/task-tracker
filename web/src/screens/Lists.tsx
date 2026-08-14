@@ -4,7 +4,6 @@ import { useAuth } from '../lib/auth';
 import { useData } from '../lib/store';
 import { cadenceLabel, resetsInLabel } from '../lib/format';
 import { NewListSheet } from '../components/NewListSheet';
-import { ThemeToggle } from '../components/ThemeToggle';
 import {
   Avatar,
   AvatarStack,
@@ -17,7 +16,7 @@ import {
 } from '../components/ui';
 
 export function Lists() {
-  const { me, signOut } = useAuth();
+  const { me } = useAuth();
   const { lists, listsLoading, online, pending, savedAt } = useData();
   const [creating, setCreating] = useState(false);
 
@@ -25,32 +24,31 @@ export function Lists() {
     <div className="relative flex h-full flex-col">
       <div className="safe-top flex shrink-0 items-center justify-between px-5 pt-2 pb-3.5">
         <h1 className="text-2xl font-semibold tracking-tight">Your lists</h1>
-        {/* The avatar is 36 and this signs you out, so the button carries the
-            44px target itself rather than inheriting the avatar's size. The
-            negative margin bleeds those 8px back out, leaving the header the
-            height it had and the avatar where it was. */}
-        <button
-          type="button"
-          onClick={() => void signOut()}
+        {/* The avatar is 36 and this is a control, so the link carries the 44px
+            target itself rather than inheriting the avatar's size. The negative
+            margin bleeds those 8px back out, leaving the header the height it
+            had and the avatar where it was. */}
+        <Link
+          to="/settings"
           title={me?.email ?? undefined}
-          aria-label="Account and sign out"
+          aria-label="Your account"
           className="-m-1 flex size-11 items-center justify-center"
         >
           {me && <Avatar user={me} />}
-        </button>
+        </Link>
       </div>
 
       {/* Outside the scroll container: whether what follows is current is the
           first thing to know about it, so it must not scroll away. */}
       <OfflineBanner online={online} pending={pending} savedAt={savedAt} />
 
-      {/* Appearance rides at the end of the scroll rather than in the header.
-          It gets chosen once and then never again, so it must not compete with
-          the lists for the top of a 375px screen. Whichever branch precedes it
-          grows, which keeps it on the bottom edge when there is little above. */}
+      {/* Only the scroll container itself grows now. The branches inside it
+          used to as well, to hold the appearance control against the bottom
+          edge; that has moved to the account screen. `EmptyState` keeps its
+          own `flex-1`, which is what centres it. */}
       <div className="flex min-h-0 flex-1 flex-col overflow-y-auto pb-32 md:pb-6">
         {listsLoading ? (
-          <div className="flex flex-1 flex-col gap-3 px-4">
+          <div className="flex flex-col gap-3 px-4">
             <Skeleton className="h-[118px]" />
             <Skeleton className="h-[118px]" />
           </div>
@@ -76,7 +74,7 @@ export function Lists() {
             shares it with you.
           </EmptyState>
         ) : (
-          <div className="flex flex-1 flex-col gap-3 px-4">
+          <div className="flex flex-col gap-3 px-4">
             {lists.map((list) => (
               <Link key={list.id} to={`/l/${list.id}`} className="card block rounded-2xl p-4">
                 <div className="flex items-center gap-3">
@@ -100,8 +98,6 @@ export function Lists() {
             ))}
           </div>
         )}
-
-        <ThemeToggle className="mt-8 px-4" />
       </div>
 
       {/* On a desktop the sidebar already carries New list, pinned where it can
