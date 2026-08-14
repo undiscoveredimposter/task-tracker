@@ -42,9 +42,13 @@ export function Lists() {
           first thing to know about it, so it must not scroll away. */}
       <OfflineBanner online={online} pending={pending} savedAt={savedAt} />
 
+      {/* Only the scroll container itself grows now. The branches inside it
+          used to as well, to hold the appearance control against the bottom
+          edge; that has moved to the account screen. `EmptyState` keeps its
+          own `flex-1`, which is what centres it. */}
       <div className="flex min-h-0 flex-1 flex-col overflow-y-auto pb-32 md:pb-6">
         {listsLoading ? (
-          <div className="flex flex-1 flex-col gap-3 px-4">
+          <div className="flex flex-col gap-3 px-4">
             <Skeleton className="h-[118px]" />
             <Skeleton className="h-[118px]" />
           </div>
@@ -70,7 +74,7 @@ export function Lists() {
             shares it with you.
           </EmptyState>
         ) : (
-          <div className="flex flex-1 flex-col gap-3 px-4">
+          <div className="flex flex-col gap-3 px-4">
             {lists.map((list) => (
               <Link key={list.id} to={`/l/${list.id}`} className="card block rounded-2xl p-4">
                 <div className="flex items-center gap-3">
