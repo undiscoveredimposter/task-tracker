@@ -49,6 +49,20 @@ web client safely replay ticks queued while offline. Don't weaken either.
 Code on the web session starts, so the checks above work immediately. It is a no-op on local
 checkouts.
 
+`.mcp.json` configures two MCP servers against the deployed infrastructure, fed by
+environment variables set in the Claude Code environment (never committed):
+
+| Server | Needs | Purpose |
+|---|---|---|
+| `coolify` | `Coolify_Url`, `Coolify_Token` | Inspect/manage the Coolify deployment (see `docs/DEPLOY.md`) |
+| `firebase` | `Base64_Firebase` (base64 service account JSON) | Firebase admin for the auth project |
+
+The session-start hook decodes `Base64_Firebase` to
+`~/.config/tally/firebase-service-account.json` outside the repo; `.mcp.json` points
+`GOOGLE_APPLICATION_CREDENTIALS` at it. Both servers also need the environment's network
+policy to allow the Coolify host and `*.googleapis.com` — a 403 `CONNECT` from the proxy
+means the domain isn't allowlisted, not that a token is wrong.
+
 `.github/workflows/ci.yml` runs the same three checks on every pull request and on pushes to
 `main`. Run them locally before handing work off anyway — a red pull request costs a review
 round.

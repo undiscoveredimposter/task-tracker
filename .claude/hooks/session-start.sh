@@ -8,6 +8,17 @@
 # shared/dist exists.
 set -euo pipefail
 
+# The Firebase MCP server (.mcp.json) authenticates through
+# GOOGLE_APPLICATION_CREDENTIALS, which must be a file path. Environments that
+# provide the service account key do so as base64 in Base64_Firebase; decode it
+# outside the repo so it can never be committed.
+if [ -n "${Base64_Firebase:-}" ]; then
+  mkdir -p "$HOME/.config/tally"
+  umask 077
+  printf '%s' "$Base64_Firebase" | base64 -d > "$HOME/.config/tally/firebase-service-account.json"
+  umask 022
+fi
+
 # Local checkouts are already set up by whoever owns them; only fix up remote
 # containers, which start with no node_modules at all.
 if [ "${CLAUDE_CODE_REMOTE:-}" != "true" ]; then
