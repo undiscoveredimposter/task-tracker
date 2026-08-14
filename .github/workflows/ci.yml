@@ -84,6 +84,27 @@ jobs:
       - name: Build
         run: npm run build
 
+      # Everything above this point writes build output: shared/dist,
+      # server/dist, web/dist and web/tsconfig.tsbuildinfo (web typechecks and
+      # builds with `tsc -b`, and build mode always writes its buildinfo, even
+      # under --noEmit). All of it is ignored, so a clean tree here is the
+      # assertion that it stayed that way.
+      #
+      # web/tsconfig.tsbuildinfo was tracked once and showed up as a spurious
+      # modification in every branch that touched web/, until a reviewer had to
+      # decide each time whether to care. Keeping it out by hand is not a habit
+      # worth relying on, so this fails the run instead of asking someone to
+      # notice the diff.
+      - name: Fail if the build dirtied the working tree
+        run: |
+          if [ -n "$(git status --porcelain)" ]; then
+            echo "::error::Running the checks modified tracked files. A build artifact is tracked, or .gitignore is missing a rule."
+            git status --porcelain
+            echo "--- diff ---"
+            git diff
+            exit 1
+          fi
+
       # The hook is what gets a Claude Code on the web session to the point
       # where the three checks above run at all, and nothing else exercises it.
       - name: Check the session-start hook
