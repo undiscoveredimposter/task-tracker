@@ -239,9 +239,13 @@ export function Sheet({
       onClick={(event) => {
         if (event.target === event.currentTarget) onClose();
       }}
-      className="fixed inset-0 m-0 flex h-full max-h-none w-full max-w-none flex-col justify-end border-0 bg-transparent p-0"
+      className="fixed inset-0 m-0 h-full max-h-none w-full max-w-none border-0 bg-transparent p-0"
     >
-      <div className="anim-sheet max-h-full overflow-y-auto rounded-t-3xl bg-surface px-5 pt-2 pb-[calc(env(safe-area-inset-bottom)+24px)] shadow-[0_-12px_40px_rgba(0,0,0,.4)]">
+      {/* Edge to edge on a phone. On a laptop it takes the width and the place
+          of the task column it belongs to, because a form that is one text
+          input stretched across 1400px is not one anyone wants to fill in.
+          Positioned against the dialog, which is the containing block. */}
+      <div className="anim-sheet absolute right-0 bottom-0 left-[var(--sidebar-width,0px)] mx-auto max-h-full max-w-column overflow-y-auto rounded-t-3xl bg-surface px-5 pt-2 pb-[calc(env(safe-area-inset-bottom)+24px)] shadow-[0_-12px_40px_rgba(0,0,0,.4)]">
         <div className="flex justify-center pt-1 pb-3">
           <span aria-hidden="true" className="h-1.5 w-10 rounded-full bg-outline" />
         </div>
