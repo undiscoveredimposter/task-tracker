@@ -1,6 +1,6 @@
 // Must come first: it registers the module-resolution hooks that let the
 // dynamic import of `src/app.ts` reach its `./config.js`-style specifiers.
-import './helpers/ts-resolve.ts';
+import '../scripts/ts-resolve.ts';
 
 import assert from 'node:assert/strict';
 import { once } from 'node:events';
