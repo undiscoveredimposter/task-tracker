@@ -92,6 +92,12 @@ export function fakeServer(): FakeServer {
   const answers = new Map<string, () => Promise<unknown>>();
   const realFetch = globalThis.fetch;
 
+  // The store loads the spaces and the lists together, so every test that
+  // answers one would otherwise have to answer the other to get past "offline".
+  // An account with no spaces is the uninteresting default; a test that cares
+  // registers its own.
+  answers.set('/api/spaces', () => Promise.resolve([]));
+
   globalThis.fetch = ((input: RequestInfo | URL) => {
     const url = String(input);
     asked.push(url);

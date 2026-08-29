@@ -19,8 +19,9 @@ These were chosen explicitly and the rest of the plan assumes them.
 | Hosting | Coolify — API + static frontend in one image, Postgres as a Coolify-managed database |
 | Invites | Copy-link only. No transactional email provider, no domain/SPF/DKIM setup |
 | Invite link scope | Anyone with the link can join (see §11 for the guardrails this needs) |
+| Unit of sharing | A **space** holds lists; you share the space, and everything in it follows |
 | Reset timing | Per-list IANA timezone + configurable reset hour, default 04:00 |
-| Roles | Per-person: `owner` / `editor` / `viewer`, chosen at invite time |
+| Roles | Per-person, per **space**: `owner` / `editor` / `viewer`, chosen at invite time |
 | Completion UX | Shows who completed it and when, live; per-person stats and streaks |
 | Frontend | Vite + React + TypeScript + Tailwind, shipped as an installable PWA |
 
@@ -61,7 +62,15 @@ docker-compose.yml  what Coolify deploys
 users            id, firebase_uid unique, email citext, display_name, photo_url,
                  created_at, last_seen_at
 
+spaces           id, name, emoji, owner_id → users, created_at
+                 -- who a set of lists is shared with
+
+space_members    space_id, user_id, role 'owner'|'editor'|'viewer', joined_at
+                 PK (space_id, user_id)   -- the whole of membership
+
 lists            id, name, emoji, color, owner_id → users,
+                 space_id → spaces        -- every list is in exactly one
+                 private                  -- kept out of the space; owner only
                  timezone            -- IANA, e.g. 'Europe/London'
                  reset_hour          -- 0..23, default 4
                  cadence             -- 'daily'|'weekly'|'monthly'|'every_n_days'|'none'
@@ -70,21 +79,27 @@ lists            id, name, emoji, color, owner_id → users,
                  cadence_anchor      -- date, only for every_n_days
                  created_at, archived_at
 
-list_members     list_id, user_id, role 'owner'|'editor'|'viewer', joined_at
-                 PK (list_id, user_id)
-
 tasks            id, list_id, title, notes, position, created_by,
                  created_at, archived_at        -- soft delete, keeps stats honest
 
 task_completions id, task_id, period_key, completed_by → users, completed_at
                  UNIQUE (task_id, period_key)   -- the whole reset mechanism
 
-invites          id, list_id, token unique, role, invited_email nullable,
+invites          id, space_id, token unique, role, invited_email nullable,
                  created_by, created_at, expires_at, max_uses, use_count,
                  revoked_at
 ```
 
-Two things worth calling out:
+Three things worth calling out:
+
+**Membership is a property of the space, never of a list.** Your role in a space
+is your role on every list in it, which is what makes sharing keep applying to
+lists that do not exist yet. Two rules sit on top of that, both in
+`server/src/lists.ts`: a list's own owner always has owner rights on it, even in
+a space they merely edit; and a `private` list is visible to its owner alone,
+however the space is shared. Migration 004 moved the old per-list membership
+into this shape, merging roles strongest-wins — see the file's own header for
+what that cost.
 
 **Nothing is ever "reset".** There is no nightly cron wiping checkboxes. A completion is stored
 against a `period_key` — the identifier of the day/week/month it belongs to. Asking "is this done?"
@@ -121,10 +136,17 @@ contact, so there's no separate registration step.
 
 ```
 GET    /api/me
+GET    /api/spaces                       spaces you are in, with members
+POST   /api/spaces                       { name, emoji }
+GET    /api/spaces/:id
+PATCH  /api/spaces/:id                   name, emoji            (owner)
+DELETE /api/spaces/:id                   refused while it holds lists
+
 GET    /api/lists                        lists + today's progress for each
-POST   /api/lists
+POST   /api/lists                        { spaceId? } — your own space by default
 GET    /api/lists/:id                    tasks, current period state, members
-PATCH  /api/lists/:id                    name, emoji, cadence, timezone, reset hour
+PATCH  /api/lists/:id                    name, emoji, cadence, timezone, reset hour,
+                                         private, spaceId (move — list owner only)
 DELETE /api/lists/:id
 
 POST   /api/lists/:id/tasks
@@ -136,34 +158,43 @@ DELETE /api/tasks/:id/complete           untick
 
 GET    /api/lists/:id/stats?window=30    per-person counts, streaks, completion rate
 
-POST   /api/lists/:id/invites            { role } → { token, url }
-GET    /api/invites/:token               preview: list name, inviter, role (no auth)
-POST   /api/invites/:token/accept
+POST   /api/spaces/:id/invites           { role } → { token, url }
+GET    /api/invites/:token               preview: space name, inviter, role (no auth)
+POST   /api/invites/:token/accept        → { spaceId }
 DELETE /api/invites/:id                  revoke
-GET    /api/lists/:id/members
-PATCH  /api/lists/:id/members/:userId    change role
-DELETE /api/lists/:id/members/:userId    remove, or leave if it's yourself
+GET    /api/spaces/:id/members
+PATCH  /api/spaces/:id/members/:userId   change role
+DELETE /api/spaces/:id/members/:userId   remove, or leave if it's yourself
 
 GET    /api/stream                       SSE, all lists you're a member of
 GET    /api/health                       for Coolify's healthcheck
 ```
 
-**Role enforcement**, checked in middleware on every list-scoped route:
+**Role enforcement**, checked in middleware on every list- and space-scoped
+route. The role is the caller's role in the space that holds the list:
 
 | | viewer | editor | owner |
 |---|---|---|---|
 | Tick / untick tasks | ✅ | ✅ | ✅ |
 | Add / rename / delete tasks | — | ✅ | ✅ |
+| Make a list in the space | — | ✅ | ✅ |
 | Invite others, change roles | — | — | ✅ |
 | Change cadence & settings | — | — | ✅ |
 | Delete the list | — | — | ✅ |
 
 Editors deliberately *cannot* invite — sharing stays with the owner. Say if you'd rather they could.
 
+Two exceptions to "your space role is your role", both in `requireListAccess`:
+a list's **owner** holds owner rights on it wherever it lives, so an editor who
+makes a list can still configure and delete it; and a **private** list resolves
+to no role at all for anyone but its owner, so it 404s like a list that was
+never there. Moving a list between spaces is the one thing its owner can do that
+the space's owner cannot — it changes who can see it, so it is not theirs to do.
+
 ## 6. Realtime
 
 `GET /api/stream` holds an SSE connection per signed-in device. The server keeps an in-memory map
-of `userId → connections`; any mutation looks up that list's members and pushes
+of `userId → connections`; any mutation looks up the members of the list's *space* and pushes
 `{ type: 'task.completed', listId, taskId, by, at }` to each connected member. Client applies it to
 local state — no refetch. Reconnect with backoff, and refetch the list on reconnect to close any gap.
 
@@ -187,8 +218,10 @@ Four things that shape the implementation:
 - **Nothing is replayed.** `NOTIFY` has no backlog, so events raised during a gap are lost — which
   is why clients refetch on reconnect rather than treating the stream as the source of truth.
 - **Identifiers, not rows.** A `NOTIFY` payload is capped at 8000 bytes. The payload carries the
-  list id and the event; the audience is resolved by each instance from `list_members`, so
-  membership size can't push it over. An event whose body is somehow too big degrades to
+  list id — or, for a membership change, the space id — and the event; the audience is resolved by
+  each instance from `space_members`, so membership size can't push it over. A private list's
+  audience collapses to its owner in that same query, which is what keeps a tick on it off
+  everybody else's stream. An event whose body is somehow too big degrades to
   `task.changed`, which the client already handles by refetching.
 
 The channel is `tally_events`, overridable with `TALLY_EVENT_CHANNEL`. Channels are per-database
@@ -209,11 +242,13 @@ be added to Firebase's **Authorized domains**, or sign-in fails in production on
 
 ## 8. Sharing flow
 
-1. Owner opens Share, picks a role (viewer or editor), taps **Create invite link**.
-2. API returns `https://<app>/invite/<token>`. Owner copies it and sends it however they like.
+1. Owner opens a space, picks a role (viewer or editor), taps **Create invite link**.
+2. API returns `https://<app>/j/<token>`. Owner copies it and sends it however they like.
 3. Recipient opens it. Signed out → sign-in screen, then straight back to the invite. Signed in →
    "Alex invited you to **Home** as an editor" → Join.
-4. Accepting inserts a `list_members` row and increments `use_count`.
+4. Accepting inserts a `space_members` row and increments `use_count`. Every list in the space is
+   theirs to see from that moment — and so is every list added to it afterwards, which is the
+   point: sharing is a standing arrangement, not a per-list chore.
 
 The optional `invited_email` field is kept on the invite for display only ("invited alex@…"), since
 you chose links that aren't email-locked.

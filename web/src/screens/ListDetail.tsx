@@ -136,12 +136,18 @@ export function ListDetail() {
           <Link to={`/l/${list.id}/stats`} className="tap flex items-center text-accent-ink underline underline-offset-[3px]">
             How it&apos;s going
           </Link>
-          {isOwner && (
+          {/* Sharing is a property of the space, not of this list — so this
+              goes to the space, and a private list has no such link at all. */}
+          {!list.private && (
             <>
               <span className="tap flex items-center text-muted">·</span>
-              <Link to={`/l/${list.id}/share`} className="tap flex items-center text-accent-ink underline underline-offset-[3px]">
-                Share
+              <Link to={`/s/${list.spaceId}`} className="tap flex items-center text-accent-ink underline underline-offset-[3px]">
+                Sharing
               </Link>
+            </>
+          )}
+          {isOwner && (
+            <>
               <span className="tap flex items-center text-muted">·</span>
               <Link to={`/l/${list.id}/settings`} className="tap flex items-center text-accent-ink underline underline-offset-[3px]">
                 Settings

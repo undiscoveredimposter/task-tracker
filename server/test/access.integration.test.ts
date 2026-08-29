@@ -53,8 +53,9 @@ describe('access control', { skip: SKIP_REASON }, () => {
         await anon.get(`/api/lists/${list.id}`),
         await anon.post(`/api/lists/${list.id}/tasks`, { title: 'x' }),
         await anon.post(`/api/tasks/${task.id}/complete`),
-        await anon.get(`/api/lists/${list.id}/members`),
-        await anon.post(`/api/lists/${list.id}/invites`, { role: 'viewer' }),
+        await anon.get(`/api/spaces/${list.spaceId}/members`),
+        await anon.post(`/api/spaces/${list.spaceId}/invites`, { role: 'viewer' }),
+        await anon.get('/api/spaces'),
       ]) {
         assert.equal(response.status, 401);
       }
@@ -95,7 +96,10 @@ describe('access control', { skip: SKIP_REASON }, () => {
 
     it('cannot change settings, invite or delete the list', async () => {
       assert.equal((await viewer.patch(`/api/lists/${list.id}`, { name: 'Nope' })).status, 403);
-      assert.equal((await viewer.post(`/api/lists/${list.id}/invites`, { role: 'viewer' })).status, 403);
+      assert.equal(
+        (await viewer.post(`/api/spaces/${list.spaceId}/invites`, { role: 'viewer' })).status,
+        403,
+      );
       assert.equal((await viewer.del(`/api/lists/${list.id}`)).status, 403);
     });
 
@@ -114,36 +118,52 @@ describe('access control', { skip: SKIP_REASON }, () => {
       assert.equal((await editor.del(`/api/tasks/${added.id}`)).status, 204);
     });
 
-    it('cannot invite anyone — sharing stays with the owner', async () => {
-      const response = await editor.post(`/api/lists/${list.id}/invites`, { role: 'viewer' });
+    it('cannot invite anyone — sharing stays with the space owner', async () => {
+      const response = await editor.post(`/api/spaces/${list.spaceId}/invites`, { role: 'viewer' });
       assert.equal(response.status, 403);
       assert.match(response.body.error, /owner/i);
     });
 
     it('cannot see or revoke the owner’s invites', async () => {
-      const created = await owner.post(`/api/lists/${list.id}/invites`, { role: 'viewer' });
+      const created = await owner.post(`/api/spaces/${list.spaceId}/invites`, { role: 'viewer' });
       assert.equal(created.status, 201);
 
-      assert.equal((await editor.get(`/api/lists/${list.id}/invites`)).status, 403);
+      assert.equal((await editor.get(`/api/spaces/${list.spaceId}/invites`)).status, 403);
       assert.equal((await editor.del(`/api/invites/${created.body.id}`)).status, 403);
     });
 
     it('cannot change cadence, roles or delete the list', async () => {
       assert.equal((await editor.patch(`/api/lists/${list.id}`, { cadence: 'weekly' })).status, 403);
       assert.equal(
-        (await editor.patch(`/api/lists/${list.id}/members/${viewer.id}`, { role: 'editor' })).status,
+        (await editor.patch(`/api/spaces/${list.spaceId}/members/${viewer.id}`, { role: 'editor' }))
+          .status,
         403,
       );
       assert.equal((await editor.del(`/api/lists/${list.id}`)).status, 403);
+    });
+
+    it('can make a list of their own in the space, and owns that one', async () => {
+      const made = await editor.post('/api/lists', { name: 'Gym', spaceId: list.spaceId });
+      assert.equal(made.status, 201);
+      assert.equal(made.body.spaceId, list.spaceId);
+      assert.equal(made.body.role, 'owner', 'you own what you made, wherever you made it');
+
+      // …which is the whole of the exception: they own that list, not the space.
+      assert.equal((await editor.patch(`/api/lists/${made.body.id}`, { name: 'Gym bag' })).status, 200);
+      assert.equal((await editor.del(`/api/lists/${made.body.id}`)).status, 204);
     });
   });
 
   describe('an owner', () => {
     it('can do all of it', async () => {
       assert.equal((await owner.patch(`/api/lists/${list.id}`, { name: 'Flat' })).status, 200);
-      assert.equal((await owner.post(`/api/lists/${list.id}/invites`, { role: 'editor' })).status, 201);
       assert.equal(
-        (await owner.patch(`/api/lists/${list.id}/members/${viewer.id}`, { role: 'editor' })).status,
+        (await owner.post(`/api/spaces/${list.spaceId}/invites`, { role: 'editor' })).status,
+        201,
+      );
+      assert.equal(
+        (await owner.patch(`/api/spaces/${list.spaceId}/members/${viewer.id}`, { role: 'editor' }))
+          .status,
         204,
       );
       assert.equal((await owner.del(`/api/lists/${list.id}`)).status, 204);
@@ -157,10 +177,11 @@ describe('access control', { skip: SKIP_REASON }, () => {
         await stranger.patch(`/api/lists/${list.id}`, { name: 'Mine now' }),
         await stranger.del(`/api/lists/${list.id}`),
         await stranger.post(`/api/lists/${list.id}/tasks`, { title: 'Mine now' }),
-        await stranger.get(`/api/lists/${list.id}/members`),
         await stranger.get(`/api/lists/${list.id}/stats`),
-        await stranger.get(`/api/lists/${list.id}/invites`),
-        await stranger.post(`/api/lists/${list.id}/invites`, { role: 'viewer' }),
+        await stranger.get(`/api/spaces/${list.spaceId}`),
+        await stranger.get(`/api/spaces/${list.spaceId}/members`),
+        await stranger.get(`/api/spaces/${list.spaceId}/invites`),
+        await stranger.post(`/api/spaces/${list.spaceId}/invites`, { role: 'viewer' }),
       ]) {
         assert.equal(response.status, 404);
         assert.doesNotMatch(String(response.body.error), /permission/i);
@@ -195,7 +216,10 @@ describe('access control', { skip: SKIP_REASON }, () => {
       await h.join(list.id, stranger.id, 'viewer');
       assert.equal((await stranger.get(`/api/lists/${list.id}`)).status, 200);
 
-      assert.equal((await stranger.del(`/api/lists/${list.id}/members/${stranger.id}`)).status, 204);
+      assert.equal(
+        (await stranger.del(`/api/spaces/${list.spaceId}/members/${stranger.id}`)).status,
+        204,
+      );
       assert.equal((await stranger.get(`/api/lists/${list.id}`)).status, 404);
     });
   });
@@ -216,12 +240,19 @@ describe('access control', { skip: SKIP_REASON }, () => {
       'DELETE /api/lists/:id': () => as.del(`/api/lists/${id}`),
       'POST /api/lists/:id/tasks': () => as.post(`/api/lists/${id}/tasks`, { title: 'Mine now' }),
       'GET /api/lists/:id/stats': () => as.get(`/api/lists/${id}/stats`),
-      'GET /api/lists/:id/members': () => as.get(`/api/lists/${id}/members`),
-      'PATCH /api/lists/:id/members/:userId': () =>
-        as.patch(`/api/lists/${id}/members/${MISSING}`, { role: 'editor' }),
-      'DELETE /api/lists/:id/members/:userId': () => as.del(`/api/lists/${id}/members/${MISSING}`),
-      'GET /api/lists/:id/invites': () => as.get(`/api/lists/${id}/invites`),
-      'POST /api/lists/:id/invites': () => as.post(`/api/lists/${id}/invites`, { role: 'viewer' }),
+    });
+
+    /** The same, for the routes keyed on a space id. */
+    const spaceRoutes = (as: TestUser, id: string): Record<string, () => Promise<any>> => ({
+      'GET /api/spaces/:id': () => as.get(`/api/spaces/${id}`),
+      'PATCH /api/spaces/:id': () => as.patch(`/api/spaces/${id}`, { name: 'Mine now' }),
+      'DELETE /api/spaces/:id': () => as.del(`/api/spaces/${id}`),
+      'GET /api/spaces/:id/members': () => as.get(`/api/spaces/${id}/members`),
+      'PATCH /api/spaces/:id/members/:userId': () =>
+        as.patch(`/api/spaces/${id}/members/${MISSING}`, { role: 'editor' }),
+      'DELETE /api/spaces/:id/members/:userId': () => as.del(`/api/spaces/${id}/members/${MISSING}`),
+      'GET /api/spaces/:id/invites': () => as.get(`/api/spaces/${id}/invites`),
+      'POST /api/spaces/:id/invites': () => as.post(`/api/spaces/${id}/invites`, { role: 'viewer' }),
     });
 
     /** The same, for the routes keyed on a task id. */
@@ -238,6 +269,7 @@ describe('access control', { skip: SKIP_REASON }, () => {
 
     const allRoutes = (as: TestUser, id: string) => ({
       ...listRoutes(as, id),
+      ...spaceRoutes(as, id),
       ...taskRoutes(as, id),
       ...inviteRoutes(as, id),
     });
@@ -276,15 +308,16 @@ describe('access control', { skip: SKIP_REASON }, () => {
       }
     });
 
-    it('is a 404 for a malformed member id on a list you do own', async () => {
-      // The list resolves, so this is the second id on the path being rejected.
-      const missing = await owner.patch(`/api/lists/${list.id}/members/${MISSING}`, { role: 'editor' });
-      const malformed = await owner.patch(`/api/lists/${list.id}/members/not-a-uuid`, { role: 'editor' });
+    it('is a 404 for a malformed member id on a space you do own', async () => {
+      // The space resolves, so this is the second id on the path being rejected.
+      const base = `/api/spaces/${list.spaceId}/members`;
+      const missing = await owner.patch(`${base}/${MISSING}`, { role: 'editor' });
+      const malformed = await owner.patch(`${base}/not-a-uuid`, { role: 'editor' });
       assert.equal(malformed.status, 404);
       assert.deepEqual(malformed.body, missing.body);
 
-      const missingDel = await owner.del(`/api/lists/${list.id}/members/${MISSING}`);
-      const malformedDel = await owner.del(`/api/lists/${list.id}/members/not-a-uuid`);
+      const missingDel = await owner.del(`${base}/${MISSING}`);
+      const malformedDel = await owner.del(`${base}/not-a-uuid`);
       assert.equal(malformedDel.status, 404);
       assert.deepEqual(malformedDel.body, missingDel.body);
     });
@@ -346,10 +379,13 @@ describe('access control', { skip: SKIP_REASON }, () => {
       assert.equal((await owner.post('/api/lists', { name: 'x', cadence: 'hourly' })).status, 400);
       assert.equal((await owner.post(`/api/lists/${list.id}/tasks`, { title: '' })).status, 400);
       assert.equal(
-        (await owner.patch(`/api/lists/${list.id}/members/${viewer.id}`, { role: 'owner' })).status,
+        (await owner.patch(`/api/spaces/${list.spaceId}/members/${viewer.id}`, { role: 'owner' }))
+          .status,
         400,
         'a client must not be able to promote anyone to owner',
       );
+      assert.equal((await owner.post('/api/spaces', {})).status, 400);
+      assert.equal((await owner.post('/api/lists', { name: 'x', spaceId: 'nope' })).status, 400);
     });
 
     it('cannot smuggle in an owner or a member id', async () => {

@@ -3,6 +3,7 @@ import { Link, NavLink, useLocation } from 'react-router-dom';
 import { useAuth } from '../lib/auth';
 import { useData } from '../lib/store';
 import { listSummaryLine } from '../lib/format';
+import { groupBySpace } from '../lib/grouping';
 import { NewListSheet } from './NewListSheet';
 import { Avatar, AvatarStack, PlusIcon, Skeleton, TallyMark } from './ui';
 
@@ -60,8 +61,9 @@ export function DesktopTopBar() {
 }
 
 export function DesktopSidebar() {
-  const { lists, listsLoading } = useData();
+  const { spaces, lists, listsLoading } = useData();
   const [creating, setCreating] = useState(false);
+  const groups = groupBySpace(spaces, lists);
 
   return (
     <nav
@@ -81,38 +83,54 @@ export function DesktopSidebar() {
             No lists yet. Make one for the daily stuff.
           </p>
         ) : (
-          <ul className="flex flex-col gap-0.5">
-            {lists.map((list) => (
-              <li key={list.id}>
-                <NavLink
-                  to={`/l/${list.id}`}
-                  className={({ isActive }) =>
-                    `tap flex items-center gap-3 rounded-xl px-3 py-2 ${
-                      isActive ? 'bg-tint' : 'hover:bg-tint2'
-                    }`
-                  }
-                >
-                  {({ isActive }) => (
-                    <>
-                      <span className="text-xl leading-none">{list.emoji}</span>
-                      <span className="min-w-0 flex-1">
-                        {/* The tint alone can't carry "this is the one you're
-                            looking at" — the weight change says it too. */}
-                        <span
-                          className={`block truncate text-[15px] ${isActive ? 'font-semibold' : 'font-medium'}`}
-                        >
-                          {list.name}
+          groups.map((group) => (
+            <ul key={group.space?.id ?? 'unsorted'} className="mb-3 flex flex-col gap-0.5">
+              {group.space && (
+                <li>
+                  {/* The space's own screen — who is in it, and the link that
+                      lets somebody else in. Same destination as the section
+                      header on the phone's home screen. */}
+                  <Link
+                    to={`/s/${group.space.id}`}
+                    className="tap flex items-center gap-2 rounded-xl px-3 py-1.5 text-[11px] font-semibold tracking-wide text-muted uppercase hover:bg-tint2"
+                  >
+                    <span className="text-sm leading-none">{group.space.emoji}</span>
+                    <span className="truncate">{group.space.name}</span>
+                  </Link>
+                </li>
+              )}
+              {group.lists.map((list) => (
+                <li key={list.id}>
+                  <NavLink
+                    to={`/l/${list.id}`}
+                    className={({ isActive }) =>
+                      `tap flex items-center gap-3 rounded-xl px-3 py-2 ${
+                        isActive ? 'bg-tint' : 'hover:bg-tint2'
+                      }`
+                    }
+                  >
+                    {({ isActive }) => (
+                      <>
+                        <span className="text-xl leading-none">{list.emoji}</span>
+                        <span className="min-w-0 flex-1">
+                          {/* The tint alone can't carry "this is the one you're
+                              looking at" — the weight change says it too. */}
+                          <span
+                            className={`block truncate text-[15px] ${isActive ? 'font-semibold' : 'font-medium'}`}
+                          >
+                            {list.name}
+                          </span>
+                          <span className="block truncate text-xs text-muted">
+                            {listSummaryLine(list)}
+                          </span>
                         </span>
-                        <span className="block truncate text-xs text-muted">
-                          {listSummaryLine(list)}
-                        </span>
-                      </span>
-                    </>
-                  )}
-                </NavLink>
-              </li>
-            ))}
-          </ul>
+                      </>
+                    )}
+                  </NavLink>
+                </li>
+              ))}
+            </ul>
+          ))
         )}
       </div>
 

@@ -10,10 +10,11 @@ import { pool } from './db.js';
 import { writeLimiter } from './limits.js';
 import { requestLogger } from './request-log.js';
 import { inlineScriptHashes, securityHeaders } from './security-headers.js';
-import { inviteRouter, listInviteRouter } from './routes/invites.js';
+import { inviteRouter, spaceInviteRouter } from './routes/invites.js';
 import { listsRouter } from './routes/lists.js';
 import { meRouter } from './routes/me.js';
 import { membersRouter } from './routes/members.js';
+import { spacesRouter } from './routes/spaces.js';
 import { streamRouter } from './routes/stream.js';
 import { tasksRouter } from './routes/tasks.js';
 
@@ -85,8 +86,9 @@ export function createApp(): Express {
   // `writeLimiter` goes after `requireAuth` on each mount so it can charge the
   // request to the person rather than to the household's shared address. It
   // skips reads, so the GETs on these routers are untouched.
-  app.use('/api/lists/:id/invites', listInviteRouter);
-  app.use('/api/lists/:id/members', requireAuth, writeLimiter, membersRouter);
+  app.use('/api/spaces/:id/invites', spaceInviteRouter);
+  app.use('/api/spaces/:id/members', requireAuth, writeLimiter, membersRouter);
+  app.use('/api/spaces', requireAuth, writeLimiter, spacesRouter);
   app.use('/api/lists', requireAuth, writeLimiter, listsRouter);
   app.use('/api/tasks', requireAuth, writeLimiter, tasksRouter);
   app.use('/api/stream', requireAuth, streamRouter);

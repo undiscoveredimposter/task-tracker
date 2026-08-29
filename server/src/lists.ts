@@ -12,6 +12,7 @@ import type {
 import { roleAtLeast } from '@tally/shared';
 import { query, queryOne } from './db.js';
 import { periodAt, type PeriodSchedule } from './periods.js';
+import { membersOfSpace } from './spaces.js';
 import { forbidden, notFound } from './errors.js';
 
 export interface ListRow {
@@ -20,6 +21,8 @@ export interface ListRow {
   emoji: string;
   color: string;
   owner_id: string;
+  space_id: string;
+  private: boolean;
   timezone: string;
   reset_hour: number;
   cadence: Cadence;
@@ -32,7 +35,8 @@ export interface ListRow {
 // cadence_anchor is a DATE; read it as text so the driver can't shift it into
 // the server's timezone and move the every_n_days cycle by a day.
 export const LIST_COLUMNS = `
-  l.id, l.name, l.emoji, l.color, l.owner_id, l.timezone, l.reset_hour,
+  l.id, l.name, l.emoji, l.color, l.owner_id, l.space_id, l.private,
+  l.timezone, l.reset_hour,
   l.cadence, l.cadence_interval_days, l.week_start,
   to_char(l.cadence_anchor, 'YYYY-MM-DD') AS cadence_anchor, l.created_at
 `;
@@ -54,6 +58,30 @@ export interface ListAccess {
 }
 
 /**
+ * The caller's role on one list, or null if they cannot see it at all.
+ *
+ * Two rules sit on top of the space role, and both are why this is a function
+ * rather than a column in the query:
+ *
+ *  - **A private list belongs to its owner alone.** Not to the space's owner,
+ *    not to anyone the space is later shared with. Otherwise "share this space"
+ *    could never be a safe thing to agree to.
+ *  - **You own what you made.** Someone who creates a list in a space they are
+ *    only an editor of still gets to rename, reconfigure and delete it. `owner`
+ *    is the top rank, so this is simply the stronger of the two grants.
+ */
+export function effectiveRole(
+  list: { owner_id: string; private: boolean },
+  spaceRole: Role | null,
+  userId: string,
+): Role | null {
+  const owns = list.owner_id === userId;
+  if (list.private) return owns ? 'owner' : null;
+  if (owns) return 'owner';
+  return spaceRole;
+}
+
+/**
  * Loads a list the caller can see, or refuses. A non-member gets 404 rather
  * than 403 — whether a list exists is itself private.
  */
@@ -62,16 +90,18 @@ export async function requireListAccess(
   userId: string,
   needed: Role = 'viewer',
 ): Promise<ListAccess> {
-  const row = await queryOne<ListRow & { role: Role | null }>(
-    `SELECT ${LIST_COLUMNS}, m.role
+  const found = await queryOne<ListRow & { space_role: Role | null }>(
+    `SELECT ${LIST_COLUMNS}, m.role AS space_role
        FROM lists l
-       LEFT JOIN list_members m ON m.list_id = l.id AND m.user_id = $2
+       LEFT JOIN space_members m ON m.space_id = l.space_id AND m.user_id = $2
       WHERE l.id = $1 AND l.archived_at IS NULL`,
     [listId, userId],
   );
 
-  if (!row || !row.role) throw notFound('That list');
-  if (!roleAtLeast(row.role, needed)) {
+  const role = found && effectiveRole(found, found.space_role, userId);
+  if (!found || !role) throw notFound('That list');
+  const row = { ...found, role };
+  if (!roleAtLeast(role, needed)) {
     throw forbidden(
       needed === 'owner'
         ? 'Only the list owner can do that'
@@ -90,23 +120,32 @@ function userRef(row: {
   return { id: row.id, displayName: row.display_name, email: row.email, photoUrl: row.photo_url };
 }
 
-async function membersOf(listId: string): Promise<Member[]> {
+/**
+ * Who can see this list: the members of its space, or — when it is private —
+ * its owner and nobody else. The same answer drives the avatars on a list card
+ * and the audience an event is delivered to.
+ */
+async function membersOf(list: ListRow): Promise<Member[]> {
+  if (!list.private) return membersOfSpace(list.space_id);
+
   const rows = await query<{
     id: string;
     display_name: string;
     email: string | null;
     photo_url: string | null;
-    role: Role;
     joined_at: Date;
   }>(
-    `SELECT u.id, u.display_name, u.email, u.photo_url, m.role, m.joined_at
-       FROM list_members m
-       JOIN users u ON u.id = m.user_id
-      WHERE m.list_id = $1
-      ORDER BY CASE m.role WHEN 'owner' THEN 0 WHEN 'editor' THEN 1 ELSE 2 END, m.joined_at`,
-    [listId],
+    `SELECT u.id, u.display_name, u.email, u.photo_url, m.joined_at
+       FROM users u
+       LEFT JOIN space_members m ON m.user_id = u.id AND m.space_id = $2
+      WHERE u.id = $1`,
+    [list.owner_id, list.space_id],
   );
-  return rows.map((row) => ({ ...userRef(row), role: row.role, joinedAt: row.joined_at.toISOString() }));
+  return rows.map((row) => ({
+    ...userRef(row),
+    role: 'owner' as const,
+    joinedAt: (row.joined_at ?? new Date(0)).toISOString(),
+  }));
 }
 
 interface TaskRow {
@@ -172,6 +211,8 @@ function summaryFrom(row: ListRow, role: Role, tasks: Task[], members: UserRef[]
     emoji: row.emoji,
     color: row.color,
     ownerId: row.owner_id,
+    spaceId: row.space_id,
+    private: row.private,
     createdAt: row.created_at.toISOString(),
     cadence: row.cadence,
     cadenceIntervalDays: row.cadence_interval_days,
@@ -187,13 +228,22 @@ function summaryFrom(row: ListRow, role: Role, tasks: Task[], members: UserRef[]
   };
 }
 
-/** Every list the user belongs to, with today's progress on each. */
+/**
+ * Every list the user can see, with today's progress on each.
+ *
+ * Reached through space membership rather than a per-list row, which is the
+ * whole point of spaces: a list added to a space you are in is yours to see
+ * without anybody sharing it with you again. Private lists are filtered out in
+ * SQL rather than by `effectiveRole` below, so the rows never leave the
+ * database in the first place.
+ */
 export async function listsForUser(userId: string): Promise<ListSummary[]> {
-  const rows = await query<ListRow & { role: Role }>(
-    `SELECT ${LIST_COLUMNS}, m.role
+  const rows = await query<ListRow & { space_role: Role }>(
+    `SELECT ${LIST_COLUMNS}, m.role AS space_role
        FROM lists l
-       JOIN list_members m ON m.list_id = l.id
+       JOIN space_members m ON m.space_id = l.space_id
       WHERE m.user_id = $1 AND l.archived_at IS NULL
+        AND (NOT l.private OR l.owner_id = $1)
       ORDER BY l.created_at`,
     [userId],
   );
@@ -201,15 +251,17 @@ export async function listsForUser(userId: string): Promise<ListSummary[]> {
   return Promise.all(
     rows.map(async (row) => {
       const period = periodAt(scheduleOf(row));
-      const [tasks, members] = await Promise.all([tasksOf(row.id, period.key), membersOf(row.id)]);
-      return summaryFrom(row, row.role, tasks, members);
+      const [tasks, members] = await Promise.all([tasksOf(row.id, period.key), membersOf(row)]);
+      // Never null here: the join above already established membership.
+      const role = effectiveRole(row, row.space_role, userId) ?? row.space_role;
+      return summaryFrom(row, role, tasks, members);
     }),
   );
 }
 
 export async function listDetail(row: ListRow, role: Role): Promise<ListDetail> {
   const period = periodAt(scheduleOf(row));
-  const [tasks, members] = await Promise.all([tasksOf(row.id, period.key), membersOf(row.id)]);
+  const [tasks, members] = await Promise.all([tasksOf(row.id, period.key), membersOf(row)]);
   return { ...summaryFrom(row, role, tasks, members), tasks, members };
 }
 

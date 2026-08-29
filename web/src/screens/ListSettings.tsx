@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { LIST_COLORS, LIST_EMOJI, type Cadence, type UpdateListBody, type Weekday } from '@tally/shared';
 import { api } from '../lib/api';
+import { useAuth } from '../lib/auth';
 import { useData } from '../lib/store';
 import { cadenceLabel, resetPreview } from '../lib/format';
 import { ChevronIcon, ListSkeleton, ScreenHeader } from '../components/ui';
@@ -40,7 +41,8 @@ function timezoneOptions(current: string): string[] {
 export function ListSettings() {
   const { id = '' } = useParams();
   const navigate = useNavigate();
-  const { getList, loadList, setList, dropList } = useData();
+  const { me } = useAuth();
+  const { spaces, getList, loadList, setList, dropList } = useData();
   const list = getList(id);
 
   const [draft, setDraft] = useState<UpdateListBody>({});
@@ -80,6 +82,14 @@ export function ListSettings() {
     dropList(list.id);
     navigate('/');
   };
+
+  // Moving a list hands it to a different set of people, so it stays with the
+  // person who made it — a space owner has owner rights on the list, but not
+  // this. The server enforces the same rule; this only keeps the UI honest.
+  const canMove = list.ownerId === me?.id;
+  // Somewhere you could actually put it: a space you can add lists to.
+  const destinations = spaces.filter((space) => space.role !== 'viewer');
+  const currentSpace = spaces.find((space) => space.id === value.spaceId);
 
   return (
     <div className="safe-top h-full overflow-y-auto px-5 pb-12">
@@ -254,6 +264,57 @@ export function ListSettings() {
         <p className="rounded-xl bg-tint2 px-3.5 py-3 text-xs leading-relaxed text-muted text-pretty">
           This list currently reads as <span className="font-medium text-ink">{cadenceLabel(value)}</span>.
         </p>
+
+        <div className="flex flex-col gap-2.5 border-t border-divider pt-5">
+          <span className="text-xs font-medium text-muted">Who can see it</span>
+
+          <label className="card flex items-center gap-3 rounded-2xl px-4 py-3">
+            <input
+              type="checkbox"
+              checked={value.private ?? false}
+              onChange={(event) => set({ private: event.target.checked })}
+              className="size-5 shrink-0 accent-[var(--color-accent)]"
+            />
+            <span className="min-w-0 flex-1">
+              <span className="block text-[15px] font-medium">Keep this list to myself</span>
+              <span className="block text-xs leading-snug text-muted text-pretty">
+                Hidden from everyone else in {currentSpace?.name ?? 'this space'}, however it is
+                shared.
+              </span>
+            </span>
+          </label>
+
+          {canMove && destinations.length > 1 && (
+            <div className="flex flex-col gap-1.5">
+              <label className="text-xs font-medium text-muted" htmlFor="space">
+                Space
+              </label>
+              <div className="relative">
+                <select
+                  id="space"
+                  value={value.spaceId}
+                  onChange={(event) => set({ spaceId: event.target.value })}
+                  className="field appearance-none pr-10"
+                >
+                  {destinations.map((space) => (
+                    <option key={space.id} value={space.id}>
+                      {space.emoji} {space.name}
+                    </option>
+                  ))}
+                </select>
+                <span className="pointer-events-none absolute top-1/2 right-3.5 -translate-y-1/2 text-muted">
+                  <ChevronIcon />
+                </span>
+              </div>
+              {draft.spaceId !== undefined && draft.spaceId !== list.spaceId && (
+                <p role="status" className="rounded-xl bg-tint px-3.5 py-3 text-xs leading-relaxed text-accent-ink text-pretty">
+                  Moving this list changes who can see it — everyone in the space you move it to,
+                  and nobody from the one it leaves.
+                </p>
+              )}
+            </div>
+          )}
+        </div>
 
         {periodMoving && (
           <p role="status" className="rounded-xl bg-tint px-3.5 py-3 text-xs leading-relaxed text-accent-ink text-pretty">

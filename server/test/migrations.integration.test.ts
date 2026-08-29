@@ -7,6 +7,7 @@ const MIGRATIONS = [
   '001_init.sql',
   '002_task_positions.sql',
   '003_user_display_name_custom.sql',
+  '004_spaces.sql',
 ];
 
 /**
@@ -36,9 +37,13 @@ describe('migrations', { skip: SKIP_REASON }, () => {
 
     assert.deepEqual(await h.tableNames(), [
       'invites',
-      'list_members',
+      // Renamed by 004 rather than dropped: the roll-up into space_members is
+      // lossy, and this is the only record of what it merged.
+      'list_members_legacy',
       'lists',
       'schema_migrations',
+      'space_members',
+      'spaces',
       'task_completions',
       'tasks',
       'users',

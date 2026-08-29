@@ -4,7 +4,7 @@ import { z } from 'zod';
 import type { Stats, StatsPerson } from '@tally/shared';
 import { authed } from '../auth.js';
 import { query, queryOne, transaction } from '../db.js';
-import { broadcast } from '../events.js';
+import { broadcast, broadcastSpace } from '../events.js';
 import { HttpError } from '../errors.js';
 import {
   LIST_COLUMNS,
@@ -17,6 +17,7 @@ import {
 } from '../lists.js';
 import { uuidParam } from '../http.js';
 import { periodsBack } from '../periods.js';
+import { ensurePersonalSpace, membersOfSpace, requireSpaceAccess } from '../spaces.js';
 import { summariseStats } from '../stats.js';
 
 export const listsRouter: Router = Router();
@@ -35,6 +36,9 @@ const scheduleShape = {
 const createListSchema = z.object({
   name: z.string().trim().min(1, 'Give the list a name').max(80),
   emoji: z.string().trim().min(1).max(8).optional(),
+  /** Which space to put it in. Omitted means your own, made on demand. */
+  spaceId: z.uuid('That space id is not valid').optional(),
+  private: z.boolean().optional(),
   color: z
     .string()
     .regex(/^#[0-9a-fA-F]{6}$/, 'Colour must be a hex value')
@@ -56,19 +60,29 @@ listsRouter.post('/', async (req, res) => {
   const user = authed(req);
   const body = createListSchema.parse(req.body);
 
+  // Putting a list somewhere is a change to that space, so it takes the same
+  // role adding a task does. Naming no space means your own — which is where
+  // the very first list anybody makes brings a personal space into existence.
+  if (body.spaceId) await requireSpaceAccess(body.spaceId, user.id, 'editor');
+
   const list = await transaction(async (client) => {
+    const spaceId =
+      body.spaceId ?? (await ensurePersonalSpace(client, user.id, user.displayName));
+
     const inserted = await client.query<ListRow>(
-      `INSERT INTO lists (name, emoji, color, owner_id, timezone, reset_hour,
+      `INSERT INTO lists (name, emoji, color, owner_id, space_id, private, timezone, reset_hour,
                           cadence, cadence_interval_days, week_start, cadence_anchor)
        VALUES ($1,
                COALESCE($2, '🏠'),
                COALESCE($3, '#9184d9'),
                $4,
-               COALESCE($5, 'Europe/London'),
-               COALESCE($6, 4),
-               COALESCE($7, 'daily'),
-               COALESCE($8, 3),
-               COALESCE($9, 1),
+               $5,
+               COALESCE($6, false),
+               COALESCE($7, 'Europe/London'),
+               COALESCE($8, 4),
+               COALESCE($9, 'daily'),
+               COALESCE($10, 3),
+               COALESCE($11, 1),
                CURRENT_DATE)
        RETURNING id`,
       [
@@ -76,6 +90,8 @@ listsRouter.post('/', async (req, res) => {
         body.emoji ?? null,
         body.color ?? null,
         user.id,
+        spaceId,
+        body.private ?? null,
         body.timezone ?? null,
         body.resetHour ?? null,
         body.cadence ?? null,
@@ -86,17 +102,17 @@ listsRouter.post('/', async (req, res) => {
     const id = inserted.rows[0]?.id;
     if (!id) throw new HttpError(500, 'Could not create the list');
 
-    await client.query(
-      `INSERT INTO list_members (list_id, user_id, role) VALUES ($1, $2, 'owner')`,
-      [id, user.id],
-    );
-
     const row = await client.query<ListRow>(
       `SELECT ${LIST_COLUMNS} FROM lists l WHERE l.id = $1`,
       [id],
     );
     return row.rows[0]!;
   });
+
+  // Everyone else in the space has a new list to show, and nothing told them.
+  if (!list.private) {
+    await broadcastSpace(list.space_id, { type: 'space.changed', spaceId: list.space_id }, user.id);
+  }
 
   res.status(201).json(await listDetail(list, 'owner'));
 });
@@ -115,6 +131,17 @@ listsRouter.patch('/:id', async (req, res) => {
   // cycle begin today, which is what someone picking "every 3 days" expects.
   const restartAnchor = body.cadence === 'every_n_days' && list.cadence !== 'every_n_days';
 
+  const moving = body.spaceId !== undefined && body.spaceId !== list.space_id;
+  if (moving) {
+    // Moving a list changes who can see it, so it is the list owner's decision
+    // and nobody else's — a space owner has owner rights over the lists in
+    // their space, but handing one to a different audience is not theirs to do.
+    if (list.owner_id !== user.id) {
+      throw new HttpError(403, 'Only the person who made this list can move it');
+    }
+    await requireSpaceAccess(body.spaceId!, user.id, 'editor');
+  }
+
   const updated = await queryOne<ListRow>(
     `UPDATE lists l SET
        name                  = COALESCE($2, l.name),
@@ -125,7 +152,9 @@ listsRouter.patch('/:id', async (req, res) => {
        cadence               = COALESCE($7, l.cadence),
        cadence_interval_days = COALESCE($8, l.cadence_interval_days),
        week_start            = COALESCE($9, l.week_start),
-       cadence_anchor        = CASE WHEN $10 THEN CURRENT_DATE ELSE l.cadence_anchor END
+       cadence_anchor        = CASE WHEN $10 THEN CURRENT_DATE ELSE l.cadence_anchor END,
+       space_id              = COALESCE($11, l.space_id),
+       private               = COALESCE($12, l.private)
      WHERE l.id = $1
      RETURNING ${LIST_COLUMNS}`,
     [
@@ -139,11 +168,30 @@ listsRouter.patch('/:id', async (req, res) => {
       body.cadenceIntervalDays ?? null,
       body.weekStart ?? null,
       restartAnchor,
+      moving ? body.spaceId : null,
+      body.private ?? null,
     ],
   );
   if (!updated) throw new HttpError(500, 'Could not save those settings');
 
   await broadcast(list.id, { type: 'list.changed', listId: list.id }, user.id);
+
+  // Who can see this list just changed, and `list.changed` only reaches the
+  // people who can see it *now* — so the space it left, or the space that can
+  // no longer see it, has to be told separately or it keeps showing a card for
+  // a list that is gone.
+  const privacyChanged = updated.private !== list.private;
+  if (moving || privacyChanged) {
+    await broadcastSpace(list.space_id, { type: 'space.changed', spaceId: list.space_id }, user.id);
+    if (moving) {
+      await broadcastSpace(
+        updated.space_id,
+        { type: 'space.changed', spaceId: updated.space_id },
+        user.id,
+      );
+    }
+  }
+
   res.json(await listDetail(updated, 'owner'));
 });
 
@@ -225,24 +273,18 @@ listsRouter.get('/:id/stats', async (req, res) => {
     now: DateTime.utc(),
   });
 
-  const members = await query<{
-    id: string;
-    display_name: string;
-    email: string | null;
-    photo_url: string | null;
-  }>(
-    `SELECT u.id, u.display_name, u.email, u.photo_url
-       FROM list_members m JOIN users u ON u.id = m.user_id
-      WHERE m.list_id = $1`,
-    [list.id],
-  );
+  // Everyone in the space, whether or not they have ticked anything — a column
+  // at zero is information. A private list is a table of one.
+  const members = list.private
+    ? (await membersOfSpace(list.space_id)).filter((member) => member.id === list.owner_id)
+    : await membersOfSpace(list.space_id);
 
   const people: StatsPerson[] = members
     .map((member) => ({
       id: member.id,
-      displayName: member.display_name,
+      displayName: member.displayName,
       email: member.email,
-      photoUrl: member.photo_url,
+      photoUrl: member.photoUrl,
       count: totals.perUser.get(member.id) ?? 0,
     }))
     .sort((a, b) => b.count - a.count);

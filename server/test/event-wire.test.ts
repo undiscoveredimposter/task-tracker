@@ -96,8 +96,8 @@ describe('event envelope encoding', () => {
       { type: 'task.changed', listId: 'list-1' },
     );
 
-    const membersChanged: ServerEvent = { type: 'members.changed', listId: 'list-1' };
-    assert.deepEqual(compactEvent(membersChanged), membersChanged);
+    const spaceChanged: ServerEvent = { type: 'space.changed', spaceId: 'space-1' };
+    assert.deepEqual(compactEvent(spaceChanged), spaceChanged);
   });
 });
 
@@ -124,6 +124,36 @@ describe('event envelope decoding', () => {
     });
 
     assert.equal(decodeEnvelope(raw), null);
+  });
+
+  it('takes an envelope addressed to a space', () => {
+    const raw = JSON.stringify({
+      v: 1,
+      origin: 'a',
+      spaceId: 'space-1',
+      except: null,
+      event: { type: 'space.changed', spaceId: 'space-1' },
+    });
+
+    const decoded = decodeEnvelope(raw);
+    assert.equal(decoded?.spaceId, 'space-1');
+    assert.equal(decoded?.listId, undefined);
+  });
+
+  it('rejects one addressed to both, or to neither', () => {
+    // Either is a bug on the sending side. Guessing which audience was meant
+    // would deliver somebody else's list to somebody else's screen.
+    const envelope = (target: Record<string, unknown>) =>
+      JSON.stringify({
+        v: 1,
+        origin: 'a',
+        ...target,
+        except: null,
+        event: { type: 'task.changed', listId: 'list-1' },
+      });
+
+    assert.equal(decodeEnvelope(envelope({ listId: 'list-1', spaceId: 'space-1' })), null);
+    assert.equal(decodeEnvelope(envelope({})), null);
   });
 
   it('rejects a version it does not understand', () => {

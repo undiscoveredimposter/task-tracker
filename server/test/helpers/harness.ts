@@ -84,8 +84,14 @@ export interface Harness {
   anonymous(): ApiClient;
   /** A client sending an arbitrary bearer token, for the unhappy auth paths. */
   withToken(token: string): ApiClient;
-  /** Adds a membership row directly, for tests about roles rather than invites. */
+  /**
+   * Adds a membership row directly, for tests about roles rather than invites.
+   * Membership is space-level now, so this joins the space that holds the list
+   * — which is what "put this person on this list" means from here on.
+   */
   join(listId: string, userId: string, role: Role): Promise<void>;
+  /** The same, addressed to the space itself. */
+  joinSpace(spaceId: string, userId: string, role: Role): Promise<void>;
   /** Empties every table but leaves the schema in place. */
   truncate(): Promise<void>;
   close(): Promise<void>;
@@ -214,7 +220,16 @@ export async function startHarness(options: HarnessOptions = {}): Promise<Harnes
     };
   };
 
-  const qualified = ['task_completions', 'tasks', 'invites', 'list_members', 'lists', 'users']
+  const qualified = [
+    'task_completions',
+    'tasks',
+    'invites',
+    'list_members_legacy',
+    'space_members',
+    'lists',
+    'spaces',
+    'users',
+  ]
     .map((table) => `"${schema}".${table}`)
     .join(', ');
 
@@ -259,8 +274,16 @@ export async function startHarness(options: HarnessOptions = {}): Promise<Harnes
     withToken: (token: string) => client(token),
 
     async join(listId: string, userId: string, role: Role) {
-      await pool.query('INSERT INTO list_members (list_id, user_id, role) VALUES ($1, $2, $3)', [
-        listId,
+      await pool.query(
+        `INSERT INTO space_members (space_id, user_id, role)
+         SELECT l.space_id, $2, $3 FROM lists l WHERE l.id = $1`,
+        [listId, userId, role],
+      );
+    },
+
+    async joinSpace(spaceId: string, userId: string, role: Role) {
+      await pool.query('INSERT INTO space_members (space_id, user_id, role) VALUES ($1, $2, $3)', [
+        spaceId,
         userId,
         role,
       ]);

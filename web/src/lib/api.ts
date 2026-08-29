@@ -1,6 +1,7 @@
 import type {
   CreateInviteBody,
   CreateListBody,
+  CreateSpaceBody,
   CreateTaskBody,
   Invite,
   InvitePreview,
@@ -9,9 +10,11 @@ import type {
   Me,
   Member,
   Role,
+  SpaceSummary,
   Stats,
   UpdateListBody,
   UpdateMeBody,
+  UpdateSpaceBody,
   UpdateTaskBody,
 } from '@tally/shared';
 
@@ -81,6 +84,14 @@ export const api = {
   updateMe: (body: UpdateMeBody) => request<Me>('/me', { method: 'PATCH', ...json(body) }),
   deleteMe: () => request<void>('/me', { method: 'DELETE' }),
 
+  spaces: () => request<SpaceSummary[]>('/spaces'),
+  space: (id: string) => request<SpaceSummary>(`/spaces/${id}`),
+  createSpace: (body: CreateSpaceBody) =>
+    request<SpaceSummary>('/spaces', { method: 'POST', ...json(body) }),
+  updateSpace: (id: string, body: UpdateSpaceBody) =>
+    request<SpaceSummary>(`/spaces/${id}`, { method: 'PATCH', ...json(body) }),
+  deleteSpace: (id: string) => request<void>(`/spaces/${id}`, { method: 'DELETE' }),
+
   lists: () => request<ListSummary[]>('/lists'),
   list: (id: string) => request<ListDetail>(`/lists/${id}`),
   createList: (body: CreateListBody) => request<ListDetail>('/lists', { method: 'POST', ...json(body) }),
@@ -99,17 +110,19 @@ export const api = {
 
   stats: (listId: string, window: number) => request<Stats>(`/lists/${listId}/stats?window=${window}`),
 
-  invites: (listId: string) => request<Invite[]>(`/lists/${listId}/invites`),
-  createInvite: (listId: string, body: CreateInviteBody) =>
-    request<Invite>(`/lists/${listId}/invites`, { method: 'POST', ...json(body) }),
+  // Sharing is space-level: a link lets someone into a space, and everything
+  // in it comes with — see the model note at the top of shared/src/index.ts.
+  invites: (spaceId: string) => request<Invite[]>(`/spaces/${spaceId}/invites`),
+  createInvite: (spaceId: string, body: CreateInviteBody) =>
+    request<Invite>(`/spaces/${spaceId}/invites`, { method: 'POST', ...json(body) }),
   revokeInvite: (inviteId: string) => request<void>(`/invites/${inviteId}`, { method: 'DELETE' }),
   invitePreview: (token: string) => request<InvitePreview>(`/invites/token/${token}`),
   acceptInvite: (token: string) =>
-    request<{ listId: string }>(`/invites/token/${token}/accept`, { method: 'POST' }),
+    request<{ spaceId: string }>(`/invites/token/${token}/accept`, { method: 'POST' }),
 
-  members: (listId: string) => request<Member[]>(`/lists/${listId}/members`),
-  setMemberRole: (listId: string, userId: string, role: Exclude<Role, 'owner'>) =>
-    request<void>(`/lists/${listId}/members/${userId}`, { method: 'PATCH', ...json({ role }) }),
-  removeMember: (listId: string, userId: string) =>
-    request<void>(`/lists/${listId}/members/${userId}`, { method: 'DELETE' }),
+  members: (spaceId: string) => request<Member[]>(`/spaces/${spaceId}/members`),
+  setMemberRole: (spaceId: string, userId: string, role: Exclude<Role, 'owner'>) =>
+    request<void>(`/spaces/${spaceId}/members/${userId}`, { method: 'PATCH', ...json({ role }) }),
+  removeMember: (spaceId: string, userId: string) =>
+    request<void>(`/spaces/${spaceId}/members/${userId}`, { method: 'DELETE' }),
 };

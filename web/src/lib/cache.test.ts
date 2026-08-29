@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import type { ListDetail, ListSummary, Me, Task } from '@tally/shared';
+import type { ListDetail, ListSummary, Me, SpaceSummary, Task } from '@tally/shared';
 import {
   CACHE_VERSION,
   ReadCache,
@@ -51,6 +51,8 @@ const home = (tasks: Task[], resetsAt: string | null = LATER_TODAY): ListDetail 
   emoji: '🏠',
   color: 'blurple',
   ownerId: 'alex',
+  spaceId: 'home-space',
+  private: false,
   createdAt: '2026-08-01T00:00:00.000Z',
   cadence: 'daily',
   cadenceIntervalDays: 3,
@@ -72,6 +74,17 @@ function summaryOf(detail: ListDetail): ListSummary {
   return rest;
 }
 
+const homeSpace: SpaceSummary = {
+  id: 'home-space',
+  name: 'Alex’s home',
+  emoji: '🏠',
+  ownerId: 'alex',
+  createdAt: '2026-08-01T00:00:00.000Z',
+  role: 'owner',
+  listCount: 1,
+  members: [],
+};
+
 const snapshotOf = (
   detail: ListDetail,
   savedAt = NOW - 3_600_000,
@@ -80,6 +93,7 @@ const snapshotOf = (
   uid: 'firebase-alex',
   me: alex,
   savedAt,
+  spaces: [homeSpace],
   lists: [summaryOf(detail)],
   details: { [detail.id]: detail },
 });
@@ -300,28 +314,29 @@ describe('snapshotToPersist', () => {
   const mark = { uid: 'firebase-alex', at: NOW };
 
   it('writes what is on screen, stamped with when it was last true', () => {
-    expect(snapshotToPersist('firebase-alex', alex, mark, lists, details)).toEqual({
+    expect(snapshotToPersist('firebase-alex', alex, mark, [homeSpace], lists, details)).toEqual({
       uid: 'firebase-alex',
       me: alex,
       savedAt: NOW,
+      spaces: [homeSpace],
       lists,
       details,
     });
   });
 
   it("refuses to write one account's lists under another account's uid", () => {
-    expect(snapshotToPersist('firebase-sam', alex, mark, lists, details)).toBeNull();
+    expect(snapshotToPersist('firebase-sam', alex, mark, [homeSpace], lists, details)).toBeNull();
   });
 
   it('writes nothing while signed out', () => {
-    expect(snapshotToPersist(null, alex, mark, lists, details)).toBeNull();
+    expect(snapshotToPersist(null, alex, mark, [homeSpace], lists, details)).toBeNull();
   });
 
   it('waits for the profile the copy is keyed to', () => {
-    expect(snapshotToPersist('firebase-alex', null, mark, lists, details)).toBeNull();
+    expect(snapshotToPersist('firebase-alex', null, mark, [homeSpace], lists, details)).toBeNull();
   });
 
   it('does not save a screen that has never matched the server', () => {
-    expect(snapshotToPersist('firebase-alex', alex, null, lists, details)).toBeNull();
+    expect(snapshotToPersist('firebase-alex', alex, null, [homeSpace], lists, details)).toBeNull();
   });
 });

@@ -26,6 +26,8 @@ function list(id: string, name: string): ListSummary {
     emoji: '🏠',
     color: 'blurple',
     ownerId: 'alex',
+    spaceId: 'home-space',
+    private: false,
     createdAt: '2026-08-01T00:00:00.000Z',
     cadence: 'daily',
     cadenceIntervalDays: 3,
@@ -50,7 +52,7 @@ function seedCache(uid: string, me: Me, lists: ListSummary[]): void {
   const details: Record<string, ListDetail> = {};
   window.localStorage.setItem(
     'tally.cache',
-    JSON.stringify({ version: 1, uid, me, savedAt: SAVED_AT, lists, details }),
+    JSON.stringify({ version: 2, uid, me, savedAt: SAVED_AT, spaces: [], lists, details }),
   );
 }
 
