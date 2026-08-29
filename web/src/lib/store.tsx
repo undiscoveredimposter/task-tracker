@@ -8,7 +8,7 @@ import {
   useState,
   type ReactNode,
 } from 'react';
-import type { ListDetail, ListSummary, ServerEvent, Task } from '@tally/shared';
+import type { ListDetail, ListSummary, ServerEvent, SpaceSummary, Task } from '@tally/shared';
 import { ApiError, api, OfflineError } from './api';
 import { useAuth } from './auth';
 import { readCache, restoreSnapshot, savedAtFor, snapshotToPersist, type SavedMark } from './cache';
@@ -17,6 +17,8 @@ import { Outbox, type PendingTick } from './outbox';
 import { connectStream } from './stream';
 
 interface DataState {
+  /** The spaces the lists are grouped under, oldest first. */
+  spaces: SpaceSummary[];
   lists: ListSummary[];
   listsLoading: boolean;
   error: string | null;
@@ -25,7 +27,9 @@ interface DataState {
   pending: number;
   /** When what's on screen last matched the server. Null until it ever has. */
   savedAt: number | null;
+  /** Refetches both — a list and the space it sits in are one screen. */
   refreshLists: () => Promise<void>;
+  getSpace: (id: string) => SpaceSummary | undefined;
   getList: (id: string) => ListDetail | undefined;
   loadList: (id: string) => Promise<ListDetail | undefined>;
   setList: (detail: ListDetail) => void;
@@ -40,6 +44,7 @@ const storage: Storage | undefined = typeof window === 'undefined' ? undefined :
 export function DataProvider({ children }: { children: ReactNode }) {
   const { me, firebaseUser } = useAuth();
   const uid = firebaseUser?.uid ?? null;
+  const [spaces, setSpaces] = useState<SpaceSummary[]>([]);
   const [lists, setLists] = useState<ListSummary[]>([]);
   const [details, setDetails] = useState<Record<string, ListDetail>>({});
   const [listsLoading, setListsLoading] = useState(true);
@@ -63,7 +68,12 @@ export function DataProvider({ children }: { children: ReactNode }) {
      mid-flight — it names whose data this is, not who is looking. */
   const refreshLists = useCallback(async () => {
     try {
-      setLists(await api.lists());
+      // One round trip's worth of state: which spaces you are in, and what is
+      // in them. Fetched together so the home screen can never render lists
+      // grouped under spaces from a previous answer.
+      const [nextSpaces, nextLists] = await Promise.all([api.spaces(), api.lists()]);
+      setSpaces(nextSpaces);
+      setLists(nextLists);
       if (uid) setSaved({ uid, at: Date.now() });
       setError(null);
     } catch (cause) {
@@ -207,6 +217,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
     if (!snapshot) return;
 
     const restored = restoreSnapshot(snapshot, outbox.current.pending);
+    setSpaces(snapshot.spaces);
     setLists(restored.lists);
     setDetails(restored.details);
     setSaved({ uid, at: snapshot.savedAt });
@@ -218,9 +229,9 @@ export function DataProvider({ children }: { children: ReactNode }) {
      offline all morning still says when it was last true — and says whose it is,
      which is what stops one account's lists reaching another's disk. */
   useEffect(() => {
-    const snapshot = snapshotToPersist(uid, me, saved, lists, details);
+    const snapshot = snapshotToPersist(uid, me, saved, spaces, lists, details);
     if (snapshot) readCache.write(snapshot);
-  }, [uid, me, saved, lists, details]);
+  }, [uid, me, saved, spaces, lists, details]);
 
   /* Initial load. */
   useEffect(() => {
@@ -238,8 +249,12 @@ export function DataProvider({ children }: { children: ReactNode }) {
         case 'task.completed':
         case 'task.uncompleted':
         case 'task.changed':
-        case 'members.changed':
           void loadList(event.listId);
+          void refreshLists();
+          break;
+        case 'space.changed':
+          // Membership, a rename, a list moving in or out — all of it comes
+          // back in the pair of fetches, and none of it is worth a finer event.
           void refreshLists();
           break;
         case 'list.changed':
@@ -290,6 +305,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
 
   const value = useMemo<DataState>(
     () => ({
+      spaces,
       lists,
       listsLoading,
       error,
@@ -298,6 +314,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
       pending,
       savedAt,
       refreshLists,
+      getSpace: (id: string) => spaces.find((space) => space.id === id),
       getList: (id: string) => details[id],
       loadList,
       setList,
@@ -305,6 +322,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
       toggleTask,
     }),
     [
+      spaces,
       lists,
       listsLoading,
       error,

@@ -4,7 +4,6 @@ import type { InvitePreview } from '@tally/shared';
 import { api } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { useData } from '../lib/store';
-import { cadenceLabel } from '../lib/format';
 import { SignIn } from './SignIn';
 import { Avatar, ListSkeleton } from '../components/ui';
 
@@ -57,9 +56,11 @@ export function Invite() {
     setJoining(true);
     setError(null);
     try {
-      const { listId } = await api.acceptInvite(token);
+      const { spaceId } = await api.acceptInvite(token);
       await refreshLists();
-      navigate(`/l/${listId}`, { replace: true });
+      // Straight to the space, which is what they were actually given — its
+      // lists are all on the home screen behind it.
+      navigate(`/s/${spaceId}`, { replace: true });
     } catch (cause) {
       setError((cause as Error).message);
       load();
@@ -75,8 +76,8 @@ export function Invite() {
     return (
       <SignIn
         intro={
-          preview.list
-            ? `${preview.inviterName} invited you to ${preview.list.emoji} ${preview.list.name}. Sign in and you'll join automatically.`
+          preview.space
+            ? `${preview.inviterName} invited you to ${preview.space.emoji} ${preview.space.name}. Sign in and you'll join automatically.`
             : undefined
         }
       />
@@ -88,7 +89,7 @@ export function Invite() {
   return (
     <div className="safe-top mx-auto flex h-full w-full max-w-md flex-col px-6 pb-[calc(env(safe-area-inset-bottom)+24px)]">
       <div className="flex min-h-[340px] flex-1 flex-col items-center justify-center text-center">
-        {preview.status === 'ok' && preview.list && (
+        {preview.status === 'ok' && preview.space && (
           <>
             <span className="mb-4 flex size-16 items-center justify-center rounded-full bg-tint text-2xl font-semibold text-accent-ink">
               <Avatar user={{ displayName: preview.inviterName ?? '?', photoUrl: null }} size={64} />
@@ -96,16 +97,18 @@ export function Invite() {
             <h1 className="text-[22px] leading-tight font-semibold tracking-tight">
               {preview.inviterName} invited you to
               <br />
-              {preview.list.emoji} {preview.list.name}
+              {preview.space.emoji} {preview.space.name}
             </h1>
             <p className="mt-3 text-sm text-muted">
-              {preview.list.taskCount} task{preview.list.taskCount === 1 ? '' : 's'} ·{' '}
-              {preview.list.memberCount} member{preview.list.memberCount === 1 ? '' : 's'} ·{' '}
-              {cadenceLabel(preview.list).toLowerCase()}
+              {preview.space.listCount} list{preview.space.listCount === 1 ? '' : 's'} ·{' '}
+              {preview.space.memberCount} member{preview.space.memberCount === 1 ? '' : 's'}
             </p>
-            <p className="mt-1.5 text-[13px] text-muted">
+            <p className="mt-1.5 text-[13px] text-muted text-pretty">
               You&apos;d join as a <span className="font-medium text-accent-ink">{preview.role}</span> —{' '}
-              {preview.role === 'editor' ? 'you can tick tasks off and change them.' : 'you can tick tasks off.'}
+              {preview.role === 'editor'
+                ? 'you can tick tasks off and change them,'
+                : 'you can tick tasks off,'}{' '}
+              on every list in here.
             </p>
           </>
         )}
@@ -114,7 +117,7 @@ export function Invite() {
           <>
             {TICK}
             <h1 className="mt-4 text-xl font-semibold">
-              You&apos;re already in {preview.list?.name ?? 'this list'}
+              You&apos;re already in {preview.space?.name ?? 'this space'}
             </h1>
             <p className="mt-2.5 text-sm text-muted">Nothing to join — you&apos;re all set.</p>
           </>
@@ -135,7 +138,7 @@ export function Invite() {
             {BLOCKED}
             <h1 className="mt-4 text-xl font-semibold">This invite was turned off</h1>
             <p className="mt-2.5 text-sm leading-relaxed text-muted text-pretty">
-              The link was revoked by the list owner. Ask {preview.inviterName ?? 'them'} for a new one if
+              The link was revoked by the space owner. Ask {preview.inviterName ?? 'them'} for a new one if
               this seems wrong.
             </p>
           </>
@@ -172,7 +175,7 @@ export function Invite() {
         {preview.status === 'ok' ? (
           <>
             <button type="button" onClick={() => void join()} disabled={joining} className="btn btn-primary">
-              {joining ? 'Joining…' : `Join ${preview.list?.name ?? 'this list'}`}
+              {joining ? 'Joining…' : `Join ${preview.space?.name ?? 'this space'}`}
             </button>
             <p className="text-center text-xs text-muted">
               Signed in as {me?.email ?? me?.displayName} ·{' '}

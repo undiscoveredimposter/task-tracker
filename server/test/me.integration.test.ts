@@ -143,14 +143,14 @@ describe('your own profile', { skip: SKIP_REASON }, () => {
       assert.equal(later.body.displayName, 'Alex Rivera');
     });
 
-    it('is what the other members of a list then see', async () => {
+    it('is what the other members of a space then see', async () => {
       const list = await createList(alex);
       await h.join(list.id, sam.id, 'editor');
 
       await sam.patch('/api/me', { displayName: 'Sam O.' });
 
       const members = await alex.get<{ id: string; displayName: string }[]>(
-        `/api/lists/${list.id}/members`,
+        `/api/spaces/${list.spaceId}/members`,
       );
       const entry = members.body.find((member) => member.id === sam.id);
       assert.equal(entry?.displayName, 'Sam O.');
@@ -213,7 +213,7 @@ describe('your own profile', { skip: SKIP_REASON }, () => {
       assert.equal(response.status, 401);
     });
 
-    it('tells the lists you are on that the members list changed', async () => {
+    it('tells the spaces you are in that a name on them changed', async () => {
       const spy = new ChannelSpy(h.eventChannel);
       await spy.open();
       try {
@@ -224,10 +224,10 @@ describe('your own profile', { skip: SKIP_REASON }, () => {
         await sam.patch('/api/me', { displayName: 'Sam O.' });
 
         const event = await spy.waitFor(
-          (candidate) => candidate.type === 'members.changed' && candidate.listId === list.id,
-          'members.changed after a rename',
+          (candidate) => candidate.type === 'space.changed' && candidate.spaceId === list.spaceId,
+          'space.changed after a rename',
         );
-        assert.equal(event.type, 'members.changed');
+        assert.equal(event.type, 'space.changed');
       } finally {
         await spy.close();
       }
@@ -311,8 +311,8 @@ describe('your own profile', { skip: SKIP_REASON }, () => {
           'list.deleted for the list they owned',
         );
         await spy.waitFor(
-          (event) => event.type === 'members.changed' && event.listId === joined.id,
-          'members.changed for the list they had merely joined',
+          (event) => event.type === 'space.changed' && event.spaceId === joined.spaceId,
+          'space.changed for the space they had merely joined',
         );
       } finally {
         await spy.close();

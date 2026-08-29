@@ -1,4 +1,4 @@
-import type { ListDetail, ListSummary, Me, UserRef } from '@tally/shared';
+import type { ListDetail, ListSummary, Me, SpaceSummary, UserRef } from '@tally/shared';
 import type { PendingTick } from './outbox';
 
 /**
@@ -11,7 +11,7 @@ import type { PendingTick } from './outbox';
  */
 
 /** Bumped when the stored shape changes, so an old copy is dropped rather than trusted. */
-export const CACHE_VERSION = 1;
+export const CACHE_VERSION = 2;
 
 const STORAGE_KEY = 'tally.cache';
 
@@ -22,6 +22,8 @@ export interface CachedSnapshot {
   me: Me;
   /** When this last reflected the server, not when it was last written to disk. */
   savedAt: number;
+  /** The spaces the lists below are grouped under. Version 2 added this. */
+  spaces: SpaceSummary[];
   lists: ListSummary[];
   details: Record<string, ListDetail>;
 }
@@ -41,6 +43,7 @@ function isSnapshot(value: unknown): value is CachedSnapshot {
     typeof snapshot.savedAt === 'number' &&
     typeof snapshot.me === 'object' &&
     snapshot.me !== null &&
+    Array.isArray(snapshot.spaces) &&
     Array.isArray(snapshot.lists) &&
     typeof snapshot.details === 'object' &&
     snapshot.details !== null
@@ -140,13 +143,14 @@ export function snapshotToPersist(
   uid: string | null,
   me: Me | null,
   saved: SavedMark | null,
+  spaces: SpaceSummary[],
   lists: ListSummary[],
   details: Record<string, ListDetail>,
 ): Omit<CachedSnapshot, 'version'> | null {
   if (!uid || !me) return null;
   const savedAt = savedAtFor(saved, uid);
   if (savedAt === null) return null;
-  return { uid, me, savedAt, lists, details };
+  return { uid, me, savedAt, spaces, lists, details };
 }
 
 /** Period keys are computed server-side; all a device can tell is that its own has run out. */

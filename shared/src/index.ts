@@ -18,6 +18,27 @@ export interface UserRef {
 
 export interface Me extends UserRef {}
 
+/**
+ * A space is who a set of lists is shared with. Membership lives here and
+ * nowhere else: your role in a space is your role on every list inside it, so
+ * sharing a space once shares everything in it — now and in the future.
+ */
+export interface SpaceBase {
+  id: string;
+  name: string;
+  emoji: string;
+  ownerId: string;
+  createdAt: string;
+}
+
+export interface SpaceSummary extends SpaceBase {
+  /** The caller's role here, which is their role on every list in the space. */
+  role: Role;
+  members: Member[];
+  /** Lists the caller can see in this space — a private one counts only for its owner. */
+  listCount: number;
+}
+
 /** The cadence settings that together decide when a list clears itself. */
 export interface ListSchedule {
   cadence: Cadence;
@@ -37,11 +58,21 @@ export interface ListBase extends ListSchedule {
   emoji: string;
   color: string;
   ownerId: string;
+  /** The space this list is shared through. Every list is in exactly one. */
+  spaceId: string;
+  /**
+   * Kept out of the space: visible only to `ownerId`, however the space is
+   * shared. Somewhere to put your own things without a space of their own.
+   */
+  private: boolean;
   createdAt: string;
 }
 
 export interface ListSummary extends ListBase {
-  /** The caller's role on this list. */
+  /**
+   * The caller's effective role: their role in the space, raised to `owner` on
+   * a list they own themselves.
+   */
   role: Role;
   taskCount: number;
   doneCount: number;
@@ -75,6 +106,7 @@ export interface Member extends UserRef {
 
 export interface ListDetail extends ListSummary {
   tasks: Task[];
+  /** The space's members — or just the owner, when the list is private. */
   members: Member[];
 }
 
@@ -95,7 +127,7 @@ export type InviteStatus = 'ok' | 'expired' | 'revoked' | 'used_up' | 'not_found
 export interface InvitePreview {
   status: InviteStatus;
   /** Absent when status is `not_found`. */
-  list?: { name: string; emoji: string; taskCount: number; memberCount: number } & ListSchedule;
+  space?: { name: string; emoji: string; listCount: number; memberCount: number };
   inviterName?: string;
   role?: Exclude<Role, 'owner'>;
 }
@@ -124,7 +156,12 @@ export type ServerEvent =
   | { type: 'task.changed'; listId: string }
   | { type: 'list.changed'; listId: string }
   | { type: 'list.deleted'; listId: string }
-  | { type: 'members.changed'; listId: string }
+  /**
+   * The space itself changed — renamed, someone joined or left, a list moved in
+   * or out. Broad on purpose: the client answers all of it by refetching, and
+   * membership is not worth a finer-grained event.
+   */
+  | { type: 'space.changed'; spaceId: string }
   | { type: 'hello'; userId: string };
 
 /* ── Request payloads ────────────────────────────────────────────────────── */
@@ -138,12 +175,23 @@ export interface UpdateMeBody {
   displayName: string;
 }
 
+export interface CreateSpaceBody {
+  name: string;
+  emoji?: string;
+}
+
+export type UpdateSpaceBody = Partial<CreateSpaceBody>;
+
 export interface CreateListBody extends Partial<ListSchedule> {
   name: string;
   emoji?: string;
   color?: string;
+  /** Which space to put it in. Defaults to your own — created on demand. */
+  spaceId?: string;
+  private?: boolean;
 }
 
+/** `spaceId` here moves the list to another space; `private` hides it in place. */
 export type UpdateListBody = Partial<CreateListBody>;
 
 export interface CreateTaskBody {

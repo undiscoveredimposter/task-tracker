@@ -71,25 +71,68 @@ export function sendTo(userId: string, event: ServerEvent): void {
   }
 }
 
+/**
+ * Who should receive an event, resolved from the database on each instance
+ * rather than sent in the payload — a large household must not be able to push
+ * a NOTIFY past its 8000-byte ceiling.
+ *
+ * A list's audience is the membership of the space that holds it, which is what
+ * makes an event reach someone the list itself was never shared with. The
+ * exception is a private list: the `l.owner_id = m.user_id` condition collapses
+ * its audience to one person, so a tick on it is never announced to the space.
+ */
+async function audienceOf(target: EventTarget): Promise<Set<string>> {
+  const rows =
+    target.kind === 'space'
+      ? await query<{ user_id: string }>('SELECT user_id FROM space_members WHERE space_id = $1', [
+          target.id,
+        ])
+      : await query<{ user_id: string }>(
+          `SELECT m.user_id
+             FROM lists l
+             JOIN space_members m ON m.space_id = l.space_id
+            WHERE l.id = $1 AND (NOT l.private OR l.owner_id = m.user_id)`,
+          [target.id],
+        );
+  return new Set(rows.map((row) => row.user_id));
+}
+
 /** Writes an event to the subscribers this process happens to be holding. */
 async function deliverLocally(
-  listId: string,
+  target: EventTarget,
   event: ServerEvent,
   exceptUserId?: string,
 ): Promise<void> {
   if (subscribers.size === 0) return;
 
-  const members = await query<{ user_id: string }>(
-    'SELECT user_id FROM list_members WHERE list_id = $1',
-    [listId],
-  );
-  const audience = new Set(members.map((m) => m.user_id));
+  const audience = await audienceOf(target);
 
   for (const subscriber of subscribers) {
     if (!audience.has(subscriber.userId)) continue;
     if (exceptUserId && subscriber.userId === exceptUserId) continue;
     write(subscriber.res, event);
   }
+}
+
+/** What an event is addressed to: one list, or a whole space. */
+interface EventTarget {
+  kind: 'list' | 'space';
+  id: string;
+}
+
+async function fanOut(
+  target: EventTarget,
+  event: ServerEvent,
+  exceptUserId?: string,
+): Promise<void> {
+  await deliverLocally(target, event, exceptUserId);
+  await publish({
+    v: 1,
+    origin: INSTANCE_ID,
+    ...(target.kind === 'space' ? { spaceId: target.id } : { listId: target.id }),
+    event,
+    except: exceptUserId ?? null,
+  });
 }
 
 /**
@@ -102,14 +145,20 @@ export async function broadcast(
   event: ServerEvent,
   exceptUserId?: string,
 ): Promise<void> {
-  await deliverLocally(listId, event, exceptUserId);
-  await publish({
-    v: 1,
-    origin: INSTANCE_ID,
-    listId,
-    event,
-    except: exceptUserId ?? null,
-  });
+  await fanOut({ kind: 'list', id: listId }, event, exceptUserId);
+}
+
+/**
+ * Pushes an event to every member of a space — a rename, somebody joining or
+ * leaving, a list moving in or out. Addressed to the space rather than to each
+ * of its lists because the membership is the thing that changed.
+ */
+export async function broadcastSpace(
+  spaceId: string,
+  event: ServerEvent,
+  exceptUserId?: string,
+): Promise<void> {
+  await fanOut({ kind: 'space', id: spaceId }, event, exceptUserId);
 }
 
 async function publish(envelope: EventEnvelope): Promise<void> {
@@ -138,7 +187,11 @@ function receive(payload: string): void {
   // Our own echo. The subscribers here were written to before it was published.
   if (envelope.origin === INSTANCE_ID) return;
 
-  void deliverLocally(envelope.listId, envelope.event, envelope.except ?? undefined).catch(
+  const target: EventTarget = envelope.spaceId
+    ? { kind: 'space', id: envelope.spaceId }
+    : { kind: 'list', id: envelope.listId! };
+
+  void deliverLocally(target, envelope.event, envelope.except ?? undefined).catch(
     (error: unknown) => {
       console.error('[tally] live updates: could not deliver an event from another instance', error);
     },

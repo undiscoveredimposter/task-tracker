@@ -24,8 +24,20 @@ export interface EventEnvelope {
   v: 1;
   /** The instance that published it — how the publisher ignores its own echo. */
   origin: string;
-  /** Whose members should receive it. Resolved by each instance, not sent. */
-  listId: string;
+  /**
+   * Who should receive it — exactly one of these, resolved by each instance
+   * rather than sent. `listId` means everyone who can see that list; `spaceId`
+   * means every member of that space.
+   *
+   * `spaceId` was added alongside `listId` rather than replacing it, and the
+   * version stayed at 1 on purpose: an instance still running the previous
+   * release parses a list-addressed envelope exactly as it did before, so
+   * ticks keep crossing between instances throughout a rolling deploy. It
+   * cannot read a space-addressed one and will log and drop it, which costs a
+   * membership change its live update until those clients next refetch.
+   */
+  listId?: string | null;
+  spaceId?: string | null;
   event: ServerEvent;
   /** The person who caused it; their own UI already updated optimistically. */
   except: string | null;
@@ -66,7 +78,7 @@ const serverEventSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('task.changed'), listId: z.string() }),
   z.object({ type: z.literal('list.changed'), listId: z.string() }),
   z.object({ type: z.literal('list.deleted'), listId: z.string() }),
-  z.object({ type: z.literal('members.changed'), listId: z.string() }),
+  z.object({ type: z.literal('space.changed'), spaceId: z.string() }),
   z.object({ type: z.literal('hello'), userId: z.string() }),
 ]);
 
@@ -82,13 +94,22 @@ const _typeCoversSchema: _TypeCoversSchema = true;
 void _schemaCoversType;
 void _typeCoversSchema;
 
-const envelopeSchema = z.object({
-  v: z.literal(1),
-  origin: z.string(),
-  listId: z.string(),
-  event: serverEventSchema,
-  except: z.string().nullable(),
-});
+const envelopeSchema = z
+  .object({
+    v: z.literal(1),
+    origin: z.string(),
+    listId: z.string().nullish(),
+    spaceId: z.string().nullish(),
+    event: serverEventSchema,
+    except: z.string().nullable(),
+  })
+  // An envelope addressed to nothing has no audience to resolve, and one
+  // addressed to both is ambiguous about which. Either is a bug on the sending
+  // side; refuse it here rather than guessing at delivery time.
+  .refine(
+    (envelope) => Boolean(envelope.listId) !== Boolean(envelope.spaceId),
+    'an envelope is addressed to exactly one of listId or spaceId',
+  );
 
 /* ── Encoding ────────────────────────────────────────────────────────────── */
 

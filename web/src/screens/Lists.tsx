@@ -1,13 +1,17 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
+import type { ListSummary } from '@tally/shared';
 import { useAuth } from '../lib/auth';
 import { useData } from '../lib/store';
 import { cadenceLabel, resetsInLabel } from '../lib/format';
+import { groupBySpace } from '../lib/grouping';
 import { NewListSheet } from '../components/NewListSheet';
+import { NewSpaceSheet } from '../components/NewSpaceSheet';
 import {
   Avatar,
   AvatarStack,
   BottomBar,
+  ChevronIcon,
   EmptyState,
   OfflineBanner,
   PlusIcon,
@@ -15,10 +19,45 @@ import {
   Skeleton,
 } from '../components/ui';
 
+function ListCard({ list }: { list: ListSummary }) {
+  return (
+    <Link to={`/l/${list.id}`} className="card block rounded-2xl p-4">
+      <div className="flex items-center gap-3">
+        <span className="text-[28px] leading-none">{list.emoji}</span>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-1.5">
+            <span className="truncate text-lg font-semibold">{list.name}</span>
+            {/* Said plainly on the card, because "who can see this" is the one
+                thing about a list you should never have to open it to know. */}
+            {list.private && (
+              <span className="shrink-0 rounded-md bg-tint2 px-1.5 py-0.5 text-[11px] font-medium text-muted">
+                Private
+              </span>
+            )}
+          </div>
+          <div className="truncate text-xs text-muted">{cadenceLabel(list)}</div>
+        </div>
+        <AvatarStack users={list.members} />
+      </div>
+      <div className="mt-3.5 flex items-center gap-2.5">
+        <ProgressBar done={list.doneCount} total={list.taskCount} />
+        <span className="text-[13px] font-medium whitespace-nowrap">
+          {list.doneCount} of {list.taskCount} done
+        </span>
+      </div>
+      <div className="mt-2 text-xs text-muted first-letter:uppercase">
+        {resetsInLabel(list.resetsAt)}
+      </div>
+    </Link>
+  );
+}
+
 export function Lists() {
   const { me } = useAuth();
-  const { lists, listsLoading, online, pending, savedAt } = useData();
+  const { spaces, lists, listsLoading, online, pending, savedAt } = useData();
   const [creating, setCreating] = useState(false);
+  const [creatingSpace, setCreatingSpace] = useState(false);
+  const groups = groupBySpace(spaces, lists);
 
   return (
     <div className="relative flex h-full flex-col">
@@ -74,28 +113,44 @@ export function Lists() {
             shares it with you.
           </EmptyState>
         ) : (
-          <div className="flex flex-col gap-3 px-4">
-            {lists.map((list) => (
-              <Link key={list.id} to={`/l/${list.id}`} className="card block rounded-2xl p-4">
-                <div className="flex items-center gap-3">
-                  <span className="text-[28px] leading-none">{list.emoji}</span>
-                  <div className="min-w-0 flex-1">
-                    <div className="truncate text-lg font-semibold">{list.name}</div>
-                    <div className="truncate text-xs text-muted">{cadenceLabel(list)}</div>
-                  </div>
-                  <AvatarStack users={list.members} />
-                </div>
-                <div className="mt-3.5 flex items-center gap-2.5">
-                  <ProgressBar done={list.doneCount} total={list.taskCount} />
-                  <span className="text-[13px] font-medium whitespace-nowrap">
-                    {list.doneCount} of {list.taskCount} done
-                  </span>
-                </div>
-                <div className="mt-2 text-xs text-muted first-letter:uppercase">
-                  {resetsInLabel(list.resetsAt)}
-                </div>
-              </Link>
+          <div className="flex flex-col gap-6 px-4">
+            {groups.map((group) => (
+              <section key={group.space?.id ?? 'unsorted'} className="flex flex-col gap-3">
+                {group.space && (
+                  // The header is the way into the space: renaming it, seeing
+                  // who is in it, and the invite link all live one tap away.
+                  <Link
+                    to={`/s/${group.space.id}`}
+                    className="tap -mx-1 flex items-center gap-2 rounded-xl px-1 py-1"
+                  >
+                    <span className="text-base leading-none">{group.space.emoji}</span>
+                    <span className="truncate text-[13px] font-semibold tracking-wide text-muted uppercase">
+                      {group.space.name}
+                    </span>
+                    <span className="ml-auto flex items-center gap-1.5 text-muted">
+                      <AvatarStack users={group.space.members} size={22} />
+                      <ChevronIcon size={14} />
+                    </span>
+                  </Link>
+                )}
+
+                {group.lists.length === 0 ? (
+                  <p className="rounded-2xl border border-dashed border-control px-4 py-5 text-center text-[13px] text-muted">
+                    Nothing here yet. A list you make in this space is shared with everyone in it.
+                  </p>
+                ) : (
+                  group.lists.map((list) => <ListCard key={list.id} list={list} />)
+                )}
+              </section>
             ))}
+
+            <button
+              type="button"
+              onClick={() => setCreatingSpace(true)}
+              className="tap self-start rounded-xl px-1 text-sm font-medium text-accent-ink"
+            >
+              + New space
+            </button>
           </div>
         )}
       </div>
@@ -110,6 +165,7 @@ export function Lists() {
       </BottomBar>
 
       {creating && <NewListSheet onClose={() => setCreating(false)} />}
+      {creatingSpace && <NewSpaceSheet onClose={() => setCreatingSpace(false)} />}
     </div>
   );
 }

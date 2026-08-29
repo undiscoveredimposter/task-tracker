@@ -83,7 +83,7 @@ describe('rate limiting', { skip: SKIP_REASON }, () => {
   };
 
   const inviteToken = async () => {
-    const response = await owner.post<{ token: string }>(`/api/lists/${list.id}/invites`, {
+    const response = await owner.post<{ token: string }>(`/api/spaces/${list.spaceId}/invites`, {
       role: 'editor',
     });
     assert.equal(response.status, 201, JSON.stringify(response.body));

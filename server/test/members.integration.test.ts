@@ -11,9 +11,9 @@ import {
 } from './helpers/harness.ts';
 
 /**
- * Membership, and in particular the ways a list could be left without an owner.
- * Every one of these is a 400 rather than a silent success, because the recovery
- * from an ownerless list is a database query nobody wants to run.
+ * Membership, and in particular the ways a space could be left without an
+ * owner. Every one of these is a 400 rather than a silent success, because the
+ * recovery from an ownerless space is a database query nobody wants to run.
  */
 describe('members', { skip: SKIP_REASON }, () => {
   let h: Harness;
@@ -42,14 +42,14 @@ describe('members', { skip: SKIP_REASON }, () => {
 
   const roleOf = async (userId: string) => {
     const { rows } = await h.sql.query<{ role: string }>(
-      'SELECT role FROM list_members WHERE list_id = $1 AND user_id = $2',
-      [list.id, userId],
+      'SELECT role FROM space_members WHERE space_id = $1 AND user_id = $2',
+      [list.spaceId, userId],
     );
     return rows[0]?.role ?? null;
   };
 
   it('lists everyone with the owner first', async () => {
-    const response = await viewer.get(`/api/lists/${list.id}/members`);
+    const response = await viewer.get(`/api/spaces/${list.spaceId}/members`);
     assert.equal(response.status, 200);
     assert.deepEqual(
       response.body.map((member: { id: string; role: string }) => member.role),
@@ -59,7 +59,7 @@ describe('members', { skip: SKIP_REASON }, () => {
 
   describe('the owner', () => {
     it('cannot be demoted', async () => {
-      const response = await owner.patch(`/api/lists/${list.id}/members/${owner.id}`, {
+      const response = await owner.patch(`/api/spaces/${list.spaceId}/members/${owner.id}`, {
         role: 'editor',
       });
       assert.equal(response.status, 400);
@@ -67,29 +67,29 @@ describe('members', { skip: SKIP_REASON }, () => {
     });
 
     it('cannot remove themselves', async () => {
-      const response = await owner.del(`/api/lists/${list.id}/members/${owner.id}`);
+      const response = await owner.del(`/api/spaces/${list.spaceId}/members/${owner.id}`);
       assert.equal(response.status, 400);
       assert.match(response.body.error, /delete it instead|hand it over/i);
       assert.equal(await roleOf(owner.id), 'owner');
     });
 
     it('cannot be removed by an editor', async () => {
-      const response = await editor.del(`/api/lists/${list.id}/members/${owner.id}`);
+      const response = await editor.del(`/api/spaces/${list.spaceId}/members/${owner.id}`);
       assert.equal(response.status, 403);
       assert.equal(await roleOf(owner.id), 'owner');
     });
 
     it('cannot be removed by a viewer', async () => {
-      const response = await viewer.del(`/api/lists/${list.id}/members/${owner.id}`);
+      const response = await viewer.del(`/api/spaces/${list.spaceId}/members/${owner.id}`);
       assert.equal(response.status, 403);
       assert.equal(await roleOf(owner.id), 'owner');
     });
 
     it('always has exactly one holder', async () => {
-      await owner.patch(`/api/lists/${list.id}/members/${editor.id}`, { role: 'viewer' });
+      await owner.patch(`/api/spaces/${list.spaceId}/members/${editor.id}`, { role: 'viewer' });
       const { rows } = await h.sql.query(
-        `SELECT count(*)::int AS owners FROM list_members WHERE list_id = $1 AND role = 'owner'`,
-        [list.id],
+        `SELECT count(*)::int AS owners FROM space_members WHERE space_id = $1 AND role = 'owner'`,
+        [list.spaceId],
       );
       assert.equal(rows[0].owners, 1);
     });
@@ -98,7 +98,7 @@ describe('members', { skip: SKIP_REASON }, () => {
   describe('changing a role', () => {
     it('is the owner’s to do', async () => {
       assert.equal(
-        (await owner.patch(`/api/lists/${list.id}/members/${viewer.id}`, { role: 'editor' })).status,
+        (await owner.patch(`/api/spaces/${list.spaceId}/members/${viewer.id}`, { role: 'editor' })).status,
         204,
       );
       assert.equal(await roleOf(viewer.id), 'editor');
@@ -110,7 +110,7 @@ describe('members', { skip: SKIP_REASON }, () => {
 
     it('is refused to everyone else', async () => {
       for (const person of [editor, viewer]) {
-        const response = await person.patch(`/api/lists/${list.id}/members/${viewer.id}`, {
+        const response = await person.patch(`/api/spaces/${list.spaceId}/members/${viewer.id}`, {
           role: 'editor',
         });
         assert.equal(response.status, 403);
@@ -119,7 +119,7 @@ describe('members', { skip: SKIP_REASON }, () => {
 
     it('404s for someone who is not a member', async () => {
       const outsider = await h.signIn('outsider');
-      const response = await owner.patch(`/api/lists/${list.id}/members/${outsider.id}`, {
+      const response = await owner.patch(`/api/spaces/${list.spaceId}/members/${outsider.id}`, {
         role: 'editor',
       });
       assert.equal(response.status, 404);
@@ -128,18 +128,18 @@ describe('members', { skip: SKIP_REASON }, () => {
 
   describe('removing someone', () => {
     it('is the owner’s to do, and revokes their access', async () => {
-      assert.equal((await owner.del(`/api/lists/${list.id}/members/${viewer.id}`)).status, 204);
+      assert.equal((await owner.del(`/api/spaces/${list.spaceId}/members/${viewer.id}`)).status, 204);
       assert.equal(await roleOf(viewer.id), null);
       assert.equal((await viewer.get(`/api/lists/${list.id}`)).status, 404);
     });
 
     it('is refused to an editor', async () => {
-      assert.equal((await editor.del(`/api/lists/${list.id}/members/${viewer.id}`)).status, 403);
+      assert.equal((await editor.del(`/api/spaces/${list.spaceId}/members/${viewer.id}`)).status, 403);
       assert.equal(await roleOf(viewer.id), 'viewer');
     });
 
     it('is allowed when it is yourself — that is leaving', async () => {
-      assert.equal((await viewer.del(`/api/lists/${list.id}/members/${viewer.id}`)).status, 204);
+      assert.equal((await viewer.del(`/api/spaces/${list.spaceId}/members/${viewer.id}`)).status, 204);
       assert.equal(await roleOf(viewer.id), null);
 
       const mine = await viewer.get('/api/lists');
@@ -149,7 +149,7 @@ describe('members', { skip: SKIP_REASON }, () => {
     it('leaves the ticks behind when someone goes', async () => {
       const task = await createTask(owner, list.id, 'Feed the cat');
       await viewer.post(`/api/tasks/${task.id}/complete`);
-      await viewer.del(`/api/lists/${list.id}/members/${viewer.id}`);
+      await viewer.del(`/api/spaces/${list.spaceId}/members/${viewer.id}`);
 
       const { rows } = await h.sql.query('SELECT completed_by FROM task_completions');
       assert.equal(rows.length, 1, 'leaving a list is not a reason to rewrite its history');

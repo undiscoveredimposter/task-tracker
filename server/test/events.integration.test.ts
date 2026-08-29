@@ -115,11 +115,14 @@ describe('live updates across instances', { skip: SKIP_REASON }, () => {
 
   /** Publishes as the other instance would, with its own `origin`. */
   async function publishFromOther(event: ServerEvent, options: { except?: string } = {}) {
-    const listId = 'listId' in event ? event.listId : list.id;
+    // Addressed the way the server addresses it: a space event names the space
+    // whose members should hear it, everything else names the list.
+    const target =
+      'spaceId' in event ? { spaceId: event.spaceId } : { listId: 'listId' in event ? event.listId : list.id };
     const payload = JSON.stringify({
       v: 1,
       origin: otherInstanceId,
-      listId,
+      ...target,
       event,
       except: options.except ?? null,
     });
@@ -168,6 +171,25 @@ describe('live updates across instances', { skip: SKIP_REASON }, () => {
       (candidate) => candidate.type === 'task.changed',
       'the other instance’s event',
     );
+    assert.deepEqual(event, { type: 'task.changed', listId: list.id });
+  });
+
+  it('keeps a private list off everybody else’s stream', async () => {
+    // Sam is in the space, so Sam hears about the shared list. The private one
+    // has an audience of one, and the fan-out has to agree with the access
+    // check about that — otherwise ticking a task on it announces its existence.
+    const secret = await createList(alex, { name: 'Presents', private: true });
+    const stream = await streamFor(sam);
+
+    await publishFromOther({ type: 'task.changed', listId: secret.id });
+    await publishFromOther({ type: 'task.changed', listId: list.id });
+
+    const event = await stream.waitFor(
+      (candidate) => candidate.type === 'task.changed',
+      'the event for the list Sam can actually see',
+    );
+    // The private list's event was published first; the shared one arriving
+    // first is the assertion that the private one was never delivered at all.
     assert.deepEqual(event, { type: 'task.changed', listId: list.id });
   });
 
@@ -316,8 +338,8 @@ describe('live updates across instances', { skip: SKIP_REASON }, () => {
     const stream = await streamFor(sam);
     const events = await import('../src/events.ts');
 
-    await publishFromOther({ type: 'members.changed', listId: list.id });
-    await stream.waitFor((event) => event.type === 'members.changed', 'the first event');
+    await publishFromOther({ type: 'space.changed', spaceId: list.spaceId });
+    await stream.waitFor((event) => event.type === 'space.changed', 'the first event');
 
     const killed = await other.query<{ pid: number }>(
       `SELECT pg_terminate_backend(pid) AS ok, pid

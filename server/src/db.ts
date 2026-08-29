@@ -12,6 +12,18 @@ export const pool = new pg.Pool({
   idleTimeoutMillis: 30_000,
 });
 
+/**
+ * Anything that can run a statement — the pool, or a client inside a
+ * transaction. Helpers that are called both on their own and as part of a
+ * larger transaction take one of these rather than reaching for the pool.
+ */
+export interface Queryable {
+  query<T extends pg.QueryResultRow = pg.QueryResultRow>(
+    text: string,
+    values?: unknown[],
+  ): Promise<pg.QueryResult<T>>;
+}
+
 export async function query<T extends pg.QueryResultRow = pg.QueryResultRow>(
   text: string,
   params: unknown[] = [],

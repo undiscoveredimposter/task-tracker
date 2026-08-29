@@ -26,16 +26,27 @@ through `shared/dist`, so on a fresh clone the typechecks fail with
 Server tests are `node --test` (Node 22 type stripping, no database needed). Web tests are
 vitest. Narrow to one workspace with `npm test -w @tally/server` or `-w @tally/web`.
 
-## The one idea to understand first
+## Two ideas to understand first
 
-Lists reset without anything ever running on a schedule. A completion is stored against a
-**period key** derived from the list's timezone and reset hour, and "is this done?" means
-"is there a row for the key of the period we're in right now?". Past the reset hour the key
-changes and every task is implicitly outstanding again.
+### Lists reset without anything ever running on a schedule
+
+A completion is stored against a **period key** derived from the list's timezone and reset
+hour, and "is this done?" means "is there a row for the key of the period we're in right
+now?". Past the reset hour the key changes and every task is implicitly outstanding again.
 
 The period key is computed server-side and never sent by the client, and
 `UNIQUE (task_id, period_key)` is what makes completing idempotent — which is what lets the
 web client safely replay ticks queued while offline. Don't weaken either.
+
+### Sharing is a property of the space, not of the list
+
+Every list sits in exactly one **space**, and `space_members` is the whole of membership: your
+role there is your role on every list in it, which is why a list added to a shared space is
+shared the moment it exists. `requireListAccess` in `server/src/lists.ts` is the single place
+that resolves it, with the two exceptions on top — a list's own owner keeps owner rights on it,
+and a `private` list resolves to nothing for anybody else. An event's audience is resolved the
+same way in `server/src/events.ts`; if you change one, change both, or a private list starts
+announcing itself over SSE.
 
 ## Where to read more
 

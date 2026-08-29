@@ -39,15 +39,15 @@ describe('invites', { skip: SKIP_REASON }, () => {
   });
 
   const create = async (body: Record<string, unknown> = { role: 'editor' }) => {
-    const response = await owner.post(`/api/lists/${list.id}/invites`, body);
+    const response = await owner.post(`/api/spaces/${list.spaceId}/invites`, body);
     assert.equal(response.status, 201, JSON.stringify(response.body));
     return response.body;
   };
 
   const roleOf = async (userId: string) => {
     const { rows } = await h.sql.query<{ role: string }>(
-      'SELECT role FROM list_members WHERE list_id = $1 AND user_id = $2',
-      [list.id, userId],
+      'SELECT role FROM space_members WHERE space_id = $1 AND user_id = $2',
+      [list.spaceId, userId],
     );
     return rows[0]?.role ?? null;
   };
@@ -83,7 +83,7 @@ describe('invites', { skip: SKIP_REASON }, () => {
     });
 
     it('refuses a role the invite system has no business handing out', async () => {
-      const response = await owner.post(`/api/lists/${list.id}/invites`, { role: 'owner' });
+      const response = await owner.post(`/api/spaces/${list.spaceId}/invites`, { role: 'owner' });
       assert.equal(response.status, 400);
     });
 
@@ -92,7 +92,7 @@ describe('invites', { skip: SKIP_REASON }, () => {
       const killed = await create({ role: 'editor' });
       await owner.del(`/api/invites/${killed.id}`);
 
-      const response = await owner.get(`/api/lists/${list.id}/invites`);
+      const response = await owner.get(`/api/spaces/${list.spaceId}/invites`);
       assert.deepEqual(
         response.body.map((invite: { id: string }) => invite.id),
         [kept.id],
@@ -101,7 +101,7 @@ describe('invites', { skip: SKIP_REASON }, () => {
   });
 
   describe('previewing one', () => {
-    it('says what the list is without needing a sign-in', async () => {
+    it('says what the space is without needing a sign-in', async () => {
       const invite = await create({ role: 'viewer' });
       const preview = await h.anonymous().get(`/api/invites/token/${invite.token}`);
 
@@ -109,8 +109,9 @@ describe('invites', { skip: SKIP_REASON }, () => {
       assert.equal(preview.body.status, 'ok');
       assert.equal(preview.body.role, 'viewer');
       assert.equal(preview.body.inviterName, 'owner');
-      assert.equal(preview.body.list.name, 'Home');
-      assert.equal(preview.body.list.memberCount, 1);
+      assert.equal(preview.body.space.name, 'owner’s home');
+      assert.equal(preview.body.space.memberCount, 1);
+      assert.equal(preview.body.space.listCount, 1, 'the list the owner already made');
     });
 
     it('tells someone already in that they are already in', async () => {
@@ -126,7 +127,7 @@ describe('invites', { skip: SKIP_REASON }, () => {
       assert.deepEqual(preview.body, { status: 'not_found' });
     });
 
-    it('never leaks the list to a token that has been turned off', async () => {
+    it('never leaks the space to a token that has been turned off', async () => {
       const invite = await create();
       await owner.del(`/api/invites/${invite.id}`);
 
@@ -141,7 +142,7 @@ describe('invites', { skip: SKIP_REASON }, () => {
       const response = await guest.post(`/api/invites/token/${invite.token}/accept`);
 
       assert.equal(response.status, 200);
-      assert.equal(response.body.listId, list.id);
+      assert.equal(response.body.spaceId, list.spaceId);
       assert.equal(await roleOf(guest.id), 'viewer');
       assert.equal(await useCount(invite.id), 1);
       assert.equal((await guest.get(`/api/lists/${list.id}`)).status, 200);
@@ -225,7 +226,7 @@ describe('invites', { skip: SKIP_REASON }, () => {
       const joined = [await roleOf(guest.id), await roleOf(other.id)].filter(Boolean);
       assert.deepEqual(joined, ['viewer']);
 
-      const members = await owner.get(`/api/lists/${list.id}/members`);
+      const members = await owner.get(`/api/spaces/${list.spaceId}/members`);
       assert.equal(members.body.length, 2, 'the owner plus exactly one invitee');
     });
 

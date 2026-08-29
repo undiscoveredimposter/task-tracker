@@ -10,7 +10,7 @@ import { ListDetail } from './screens/ListDetail';
 import { ListSettings } from './screens/ListSettings';
 import { Lists } from './screens/Lists';
 import { Settings } from './screens/Settings';
-import { Share } from './screens/Share';
+import { Space } from './screens/Space';
 import { SignIn } from './screens/SignIn';
 import { Stats } from './screens/Stats';
 
@@ -104,10 +104,10 @@ function Shell() {
                 }
               />
               <Route
-                path="/l/:id/share"
+                path="/s/:id"
                 element={
                   <Protected>
-                    <Share />
+                    <Space />
                   </Protected>
                 }
               />
