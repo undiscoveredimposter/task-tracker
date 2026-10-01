@@ -278,6 +278,8 @@ silently suppressed; revisit when `firebase-admin` ships an updated
 
 Four agents work this backlog against GitHub issues, and the labelling and
 branch conventions they follow are in [docs/AGENTS.md](docs/AGENTS.md).
+[CONTRIBUTING.md](CONTRIBUTING.md) is the short version, and is what GitHub
+links from the new-issue and new-pull-request pages.
 
 Before opening a pull request: `npm run typecheck`, `npm test`, `npm run build`.
 All three. And say what you could not verify.
