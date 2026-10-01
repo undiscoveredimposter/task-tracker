@@ -72,6 +72,14 @@ export const ChevronIcon = ({ size = 16 }: { size?: number }) => (
   </svg>
 );
 
+/* Lines rather than the usual six dots: the row's other control is already a
+   column of three dots, and at 18px the two would be the same smudge. */
+export const GripIcon = ({ size = 18 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" {...stroke} strokeWidth={2}>
+    <path d="M6 8.5h12M6 12h12M6 15.5h12" />
+  </svg>
+);
+
 export const TallyMark = ({ size = 28 }: { size?: number }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" {...stroke} strokeWidth={2.2} className="text-accent">
     <path d="M4.5 12.5l5 5 10-11" />

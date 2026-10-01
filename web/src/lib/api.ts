@@ -9,6 +9,7 @@ import type {
   ListSummary,
   Me,
   Member,
+  MoveTaskBody,
   Role,
   SpaceSummary,
   Stats,
@@ -104,6 +105,11 @@ export const api = {
   updateTask: (id: string, body: UpdateTaskBody) =>
     request<void>(`/tasks/${id}`, { method: 'PATCH', ...json(body) }),
   deleteTask: (id: string) => request<void>(`/tasks/${id}`, { method: 'DELETE' }),
+  // Answers with the whole list rather than a 204: running out of room between
+  // two positions makes the server renumber every task at once, so the reply is
+  // the only trustworthy account of the order afterwards.
+  moveTask: (id: string, body: MoveTaskBody) =>
+    request<ListDetail>(`/tasks/${id}/move`, { method: 'POST', ...json(body) }),
 
   complete: (id: string) => request<unknown>(`/tasks/${id}/complete`, { method: 'POST' }),
   uncomplete: (id: string) => request<void>(`/tasks/${id}/complete`, { method: 'DELETE' }),

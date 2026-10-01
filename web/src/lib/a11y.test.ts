@@ -2,7 +2,17 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import type { Task } from '@tally/shared';
 import * as a11y from './a11y';
-import { holdFocus, taskRowLabel, undoAnnouncement } from './a11y';
+import {
+  REORDER_HINT,
+  droppedAnnouncement,
+  holdFocus,
+  liftedAnnouncement,
+  moveCancelledAnnouncement,
+  movingAnnouncement,
+  reorderHandleLabel,
+  taskRowLabel,
+  undoAnnouncement,
+} from './a11y';
 
 const SAM = { id: 'u-sam', displayName: 'Sam', email: null, photoUrl: null };
 const ZONE = 'Europe/London';
@@ -77,6 +87,38 @@ describe('undoAnnouncement', () => {
   });
 });
 
+describe('the reordering wording', () => {
+  it('names the handle with the place in the list a drag would change', () => {
+    expect(reorderHandleLabel('Feed the cat', 1, 5)).toBe('Reorder Feed the cat, 1 of 5');
+  });
+
+  it('says how to start without a pointer, on the handle itself', () => {
+    // The one sentence standing between a keyboard user and a feature they
+    // otherwise have no way of discovering exists.
+    expect(REORDER_HINT).toMatch(/arrow keys/i);
+    expect(REORDER_HINT).toMatch(/Enter/);
+  });
+
+  it('says both ways back out at the moment the row comes up', () => {
+    expect(liftedAnnouncement('Feed the cat', 1, 5)).toBe(
+      'Feed the cat lifted, 1 of 5. Arrow keys move it, Enter drops it, Escape puts it back.',
+    );
+  });
+
+  it('says where the row is now on every step, since the screen shows it moving', () => {
+    expect(movingAnnouncement('Feed the cat', 3, 5)).toBe('Feed the cat, 3 of 5');
+  });
+
+  it('confirms where the row landed rather than leaving it in the air', () => {
+    expect(droppedAnnouncement('Feed the cat', 3, 5)).toBe('Feed the cat dropped, 3 of 5.');
+  });
+
+  it('says where a cancelled row went back to, not merely that it was cancelled', () => {
+    // Escape is only trustworthy if it tells you what it restored.
+    expect(moveCancelledAnnouncement('Feed the cat', 1, 5)).toBe('Feed the cat put back, 1 of 5.');
+  });
+});
+
 describe('the network wording', () => {
   /* `ui.test.ts` holds the banner's two halves to the same sentence. This holds
      the sentence to one home: a rival wording here is how they came apart last
@@ -89,7 +131,13 @@ describe('the network wording', () => {
 
   it('is not reintroduced under another name', () => {
     expect(Object.keys(a11y).sort()).toStrictEqual([
+      'REORDER_HINT',
+      'droppedAnnouncement',
       'holdFocus',
+      'liftedAnnouncement',
+      'moveCancelledAnnouncement',
+      'movingAnnouncement',
+      'reorderHandleLabel',
       'taskRowLabel',
       'undoAnnouncement',
     ]);

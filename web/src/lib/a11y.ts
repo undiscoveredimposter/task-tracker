@@ -47,6 +47,52 @@ export function undoAnnouncement(title: string, seconds: number): string {
   return `${title} done. Undo available for ${seconds} second${seconds === 1 ? '' : 's'}.`;
 }
 
+/* ── Moving a task ───────────────────────────────────────────────────────── */
+
+const place = (position: number, count: number): string => `${position} of ${count}`;
+
+/**
+ * The drag handle's name.
+ *
+ * It carries the row's place in the list because that is the one thing a move
+ * changes, and on a handle reached with the Tab key there is nothing else
+ * saying where the row currently is.
+ */
+export function reorderHandleLabel(title: string, position: number, count: number): string {
+  return `Reorder ${title}, ${place(position, count)}`;
+}
+
+/**
+ * How to start, attached to the handle itself.
+ *
+ * A drag is unreachable without a pointer, and a keyboard route nobody is told
+ * about is unreachable in the same way — so the way in is part of the control.
+ */
+export const REORDER_HINT = 'Press Enter to lift this task, then use the arrow keys to move it.';
+
+/** The row is now in the air, and here are both ways back down. */
+export function liftedAnnouncement(title: string, position: number, count: number): string {
+  return `${title} lifted, ${place(position, count)}. Arrow keys move it, Enter drops it, Escape puts it back.`;
+}
+
+/** Each step of the way. The rows on screen slide; this is that, said aloud. */
+export function movingAnnouncement(title: string, position: number, count: number): string {
+  return `${title}, ${place(position, count)}`;
+}
+
+export function droppedAnnouncement(title: string, position: number, count: number): string {
+  return `${title} dropped, ${place(position, count)}.`;
+}
+
+/** Escape is only worth pressing if it says what it put back, and where. */
+export function moveCancelledAnnouncement(title: string, position: number, count: number): string {
+  return `${title} put back, ${place(position, count)}.`;
+}
+
+/* The refusal that undoes a move is not announced from here: it is shown in the
+   app's error line, which is a `role="alert"`, so a second spoken copy would be
+   the same sentence said twice. */
+
 /* The network state is announced too, but its wording is `offlineLabel` in
    format.ts — the banner shows the same sentence, and a second implementation
    here drifted from it the moment the offline cache started saying how old the

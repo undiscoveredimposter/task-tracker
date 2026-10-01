@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import type { Task } from '@tally/shared';
 import { taskRowLabel } from '../lib/a11y';
 import { whoDidIt } from '../lib/format';
@@ -9,6 +10,12 @@ interface TaskRowProps {
   timezone: string;
   onToggle: () => void;
   onEdit?: () => void;
+  /**
+   * The drag handle, wired up by whoever owns the ordering. A slot rather than a
+   * pair of callbacks: a drag is a gesture across the whole column, and this row
+   * has no business knowing about the ones either side of it.
+   */
+  handle?: ReactNode;
   /** True while the tick is still queued to send. */
   unsynced?: boolean;
 }
@@ -24,8 +31,13 @@ interface TaskRowProps {
  * for a `checkbox` is its contents, which would run the title, the attribution
  * and the notes together with no punctuation between them.
  */
-export function TaskRow({ task, meId, timezone, onToggle, onEdit, unsynced }: TaskRowProps) {
+export function TaskRow({ task, meId, timezone, onToggle, onEdit, handle, unsynced }: TaskRowProps) {
   const done = Boolean(task.completion);
+
+  // The controls sit over the row rather than in it, so that tapping anywhere
+  // else still ticks the task. The title has to stop before them all the same.
+  const controls = (onEdit ? 1 : 0) + (handle ? 1 : 0);
+  const clearance = controls === 2 ? 'pr-24' : controls === 1 ? 'pr-13' : 'pr-4';
 
   return (
     <div className="relative">
@@ -41,7 +53,7 @@ export function TaskRow({ task, meId, timezone, onToggle, onEdit, unsynced }: Ta
             onToggle();
           }
         }}
-        className="card flex min-h-16 cursor-pointer items-center gap-3.5 rounded-2xl px-4 py-2.5 transition-transform duration-100 select-none active:scale-[0.97]"
+        className={`card flex min-h-16 cursor-pointer items-center gap-3.5 rounded-2xl pl-4 ${clearance} py-2.5 transition-transform duration-100 select-none active:scale-[0.97]`}
       >
         <span
           aria-hidden="true"
@@ -72,19 +84,25 @@ export function TaskRow({ task, meId, timezone, onToggle, onEdit, unsynced }: Ta
         </div>
       </div>
 
-      {onEdit && (
-        <button
-          type="button"
-          onClick={onEdit}
-          aria-label={`Edit ${task.title}`}
-          className="absolute top-1/2 right-1 flex size-11 -translate-y-1/2 items-center justify-center rounded-full text-muted opacity-70"
-        >
-          <svg width={18} height={18} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-            <circle cx="12" cy="5" r="1.7" />
-            <circle cx="12" cy="12" r="1.7" />
-            <circle cx="12" cy="19" r="1.7" />
-          </svg>
-        </button>
+      {/* The grip takes the trailing edge, where every platform puts one. */}
+      {controls > 0 && (
+        <div className="absolute top-1/2 right-1 flex -translate-y-1/2 items-center">
+          {onEdit && (
+            <button
+              type="button"
+              onClick={onEdit}
+              aria-label={`Edit ${task.title}`}
+              className="flex size-11 items-center justify-center rounded-full text-muted opacity-70"
+            >
+              <svg width={18} height={18} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                <circle cx="12" cy="5" r="1.7" />
+                <circle cx="12" cy="12" r="1.7" />
+                <circle cx="12" cy="19" r="1.7" />
+              </svg>
+            </button>
+          )}
+          {handle}
+        </div>
       )}
     </div>
   );
