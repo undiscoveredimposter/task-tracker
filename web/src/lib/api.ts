@@ -1,4 +1,5 @@
 import type {
+  CreateFeedbackBody,
   CreateInviteBody,
   CreateListBody,
   CreateSpaceBody,
@@ -125,4 +126,9 @@ export const api = {
     request<void>(`/spaces/${spaceId}/members/${userId}`, { method: 'PATCH', ...json({ role }) }),
   removeMember: (spaceId: string, userId: string) =>
     request<void>(`/spaces/${spaceId}/members/${userId}`, { method: 'DELETE' }),
+
+  // Becomes a GitHub issue. Not queued in the outbox when offline: unlike a
+  // tick, it isn't something the person expects to see land on its own later.
+  sendFeedback: (body: CreateFeedbackBody) =>
+    request<void>('/feedback', { method: 'POST', ...json(body) }),
 };

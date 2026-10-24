@@ -175,6 +175,23 @@ export interface UpdateMeBody {
   displayName: string;
 }
 
+/** What somebody is telling us about the app, as they file it. */
+export type FeedbackKind = 'idea' | 'bug' | 'other';
+
+export const FEEDBACK_MESSAGE_MAX = 2000;
+
+/**
+ * The body of `POST /api/feedback`. Nothing about who sent it: the issue it
+ * becomes is on a public repository, so the server deliberately leaves the
+ * sender out and the client has no field to put them in.
+ */
+export interface CreateFeedbackBody {
+  kind: FeedbackKind;
+  message: string;
+  /** The path the person was looking at, so "this screen" means something. */
+  screen?: string;
+}
+
 export interface CreateSpaceBody {
   name: string;
   emoji?: string;

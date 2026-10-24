@@ -166,11 +166,14 @@ not.
 | `INVITE_DEFAULT_DAYS` | `7` | optional; `0` means links never expire |
 | `RATE_LIMIT_INVITE_LOOKUPS_PER_MINUTE` | `20` | optional; unauthenticated invite-link lookups, per client address |
 | `RATE_LIMIT_WRITES_PER_MINUTE` | `240` | optional; authenticated writes, per signed-in person |
+| `RATE_LIMIT_FEEDBACK_PER_HOUR` | `10` | optional; in-app feedback, per signed-in person — each one opens a GitHub issue |
+| `GITHUB_FEEDBACK_TOKEN` | fine-grained token | **secret**; optional. Without it the feedback form answers "isn't set up yet". See below |
+| `GITHUB_FEEDBACK_REPO` | `undiscoveredimposter/task-tracker` | optional; `owner/name` the feedback issues are opened on |
 | `TALLY_EVENT_CHANNEL` | `tally_events` | optional; Postgres channel live updates fan out over. Per-database, so two deployments sharing one database need different names. Validated at boot |
 | `CSP_REPORT_ONLY` | unset | optional; sends the CSP as report-only. No report endpoint is configured, so violations reach only the browser console — quiet logs prove nothing. For a deploy, not a resting state |
 | `LOG_FORMAT` | `json` in production | optional; `json` or `text`. Tokens and Firebase `apiKey`/`oobCode` params are redacted either way |
 
-Both rate limits must be **above zero**. The server refuses to start on a `0` or
+All three rate limits must be **above zero**. The server refuses to start on a `0` or
 a typo rather than booting into a wall of 429s nobody can explain, so a bad
 value shows up as a failed deploy, not a mysteriously broken app. The counters
 live in the process's memory, which is another reason to
@@ -190,6 +193,15 @@ set again in the compose file. Leave them alone —
 multi-line block or as the single line with `\n` in it — both work. What must
 survive is the `-----BEGIN PRIVATE KEY-----` and `-----END PRIVATE KEY-----`
 lines. Mark it as a secret so it is masked in the UI.
+
+**`GITHUB_FEEDBACK_TOKEN`** lets the feedback icon at the top of the app open
+issues. Create a **fine-grained** personal access token (GitHub → Settings →
+Developer settings → Fine-grained tokens) with *Only select repositories* →
+this one, and a single permission: **Issues: Read and write**. Nothing else —
+it is the only GitHub credential on the server, and an issues-only token can't
+touch code. Mark it as a secret. Issues are opened anonymously (no name, email
+or user id) and labelled `feedback` + `status:triage` for the `feedback-triage`
+agent; see `docs/AGENTS.md`.
 
 ### Build — inlined into the frontend bundle
 

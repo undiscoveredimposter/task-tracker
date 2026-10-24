@@ -49,3 +49,14 @@ export const writeLimiter: RateLimiter = rateLimit({
   keyFor: (req) => (req.user ? `user:${req.user.id}` : `ip:${clientAddress(req)}`),
   message: 'That is a lot of changes at once. Give it a moment and try again.',
 });
+
+/**
+ * In-app feedback. Every request that gets past this opens a GitHub issue, so
+ * the budget is counted in an hour rather than a minute, per person.
+ */
+export const feedbackLimiter: RateLimiter = rateLimit({
+  limit: config.rateLimit.feedbackPerHour,
+  windowMs: 60 * A_MINUTE,
+  keyFor: (req) => (req.user ? `user:${req.user.id}` : `ip:${clientAddress(req)}`),
+  message: "That's a lot of feedback in one go. Thank you — try again in a little while.",
+});

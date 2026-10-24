@@ -72,6 +72,13 @@ export const ChevronIcon = ({ size = 16 }: { size?: number }) => (
   </svg>
 );
 
+export const FeedbackIcon = ({ size = 22 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" {...stroke} strokeWidth={1.9} aria-hidden="true">
+    <path d="M5 4.5h14a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-8l-4.5 3.5v-3.5H5a2 2 0 0 1-2-2v-9a2 2 0 0 1 2-2z" />
+    <path d="M8 9.5h8M8 13h5" />
+  </svg>
+);
+
 export const TallyMark = ({ size = 28 }: { size?: number }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" {...stroke} strokeWidth={2.2} className="text-accent">
     <path d="M4.5 12.5l5 5 10-11" />
