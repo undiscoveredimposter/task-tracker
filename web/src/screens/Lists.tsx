@@ -5,6 +5,7 @@ import { useAuth } from '../lib/auth';
 import { useData } from '../lib/store';
 import { cadenceLabel, resetsInLabel } from '../lib/format';
 import { groupBySpace } from '../lib/grouping';
+import { FeedbackButton } from '../components/Feedback';
 import { NewListSheet } from '../components/NewListSheet';
 import { NewSpaceSheet } from '../components/NewSpaceSheet';
 import {
@@ -63,6 +64,9 @@ export function Lists() {
     <div className="relative flex h-full flex-col">
       <div className="safe-top flex shrink-0 items-center justify-between px-5 pt-2 pb-3.5">
         <h1 className="text-2xl font-semibold tracking-tight">Your lists</h1>
+        {/* Hidden from md: up, where the top bar already carries the same icon
+            on every screen. */}
+        <FeedbackButton className="mr-1 ml-auto md:hidden" />
         {/* The avatar is 36 and this is a control, so the link carries the 44px
             target itself rather than inheriting the avatar's size. The negative
             margin bleeds those 8px back out, leaving the header the height it

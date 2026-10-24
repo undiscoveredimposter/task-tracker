@@ -4,6 +4,7 @@ import { useAuth } from '../lib/auth';
 import { useData } from '../lib/store';
 import { listSummaryLine } from '../lib/format';
 import { groupBySpace } from '../lib/grouping';
+import { FeedbackButton } from './Feedback';
 import { NewListSheet } from './NewListSheet';
 import { Avatar, AvatarStack, PlusIcon, Skeleton, TallyMark } from './ui';
 
@@ -43,6 +44,7 @@ export function DesktopTopBar() {
               <AvatarStack users={open.members} size={26} />
             </>
           )}
+          <FeedbackButton />
           {/* A phone reaches the account screen through the avatar on the lists
               home, which a desktop never shows — the sidebar has taken that
               screen's place. This is the same way in, at the same size. */}

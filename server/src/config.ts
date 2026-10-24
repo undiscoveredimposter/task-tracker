@@ -51,6 +51,18 @@ function channel(name: string, fallback: string): string {
   return value;
 }
 
+/**
+ * An `owner/name` GitHub repository. It ends up in a request URL, so anything
+ * else stops the server at boot rather than becoming a path nobody meant.
+ */
+function repoName(name: string, fallback: string): string {
+  const value = optional(name, fallback);
+  if (!/^[A-Za-z0-9-]+\/[A-Za-z0-9._-]+$/.test(value)) {
+    throw new Error(`${name} must look like owner/repository, got ${JSON.stringify(value)}`);
+  }
+  return value;
+}
+
 // Hoisted because a couple of defaults below depend on it, and an object
 // literal cannot refer to its own fields.
 const nodeEnv = optional('NODE_ENV', 'development');
@@ -111,6 +123,22 @@ export const config = {
      * a second by hand.
      */
     writesPerMinute: positive('RATE_LIMIT_WRITES_PER_MINUTE', '240'),
+    /**
+     * In-app feedback, per signed-in person. Each one opens a GitHub issue, so
+     * this is tighter than the write budget by design: ten an hour is somebody
+     * with a lot to say, and still not somebody flooding the backlog.
+     */
+    feedbackPerHour: positive('RATE_LIMIT_FEEDBACK_PER_HOUR', '10'),
+  },
+
+  /**
+   * Where the in-app feedback form files its issues. Without a token the form
+   * still shows, and sending answers with a plain "not set up" rather than the
+   * server refusing to start — feedback is not worth an outage.
+   */
+  feedback: {
+    githubToken: optional('GITHUB_FEEDBACK_TOKEN', ''),
+    repo: repoName('GITHUB_FEEDBACK_REPO', 'undiscoveredimposter/task-tracker'),
   },
 
   /**

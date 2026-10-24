@@ -7,9 +7,10 @@ import { config, isProduction } from './config.js';
 import { errorHandler } from './errors.js';
 import { eventListenerState, subscriberCount } from './events.js';
 import { pool } from './db.js';
-import { writeLimiter } from './limits.js';
+import { feedbackLimiter, writeLimiter } from './limits.js';
 import { requestLogger } from './request-log.js';
 import { inlineScriptHashes, securityHeaders } from './security-headers.js';
+import { feedbackRouter } from './routes/feedback.js';
 import { inviteRouter, spaceInviteRouter } from './routes/invites.js';
 import { listsRouter } from './routes/lists.js';
 import { meRouter } from './routes/me.js';
@@ -92,6 +93,9 @@ export function createApp(): Express {
   app.use('/api/lists', requireAuth, writeLimiter, listsRouter);
   app.use('/api/tasks', requireAuth, writeLimiter, tasksRouter);
   app.use('/api/stream', requireAuth, streamRouter);
+  // Its own, much smaller budget instead of `writeLimiter`: each one that gets
+  // through becomes a GitHub issue.
+  app.use('/api/feedback', requireAuth, feedbackLimiter, feedbackRouter);
 
   app.use('/api', (_req, res) => {
     res.status(404).json({ error: 'No such endpoint' });
